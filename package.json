@@ -1,0 +1,13 @@
+{
+  "name": "ai-agents-office",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["frontend", "backend", "api", "shared"],
+  "scripts": {
+    "dev": "concurrently \"npm:dev -w api\" \"npm:dev -w backend\" \"npm:dev -w frontend\"",
+    "build": "npm run build -w shared && npm run build -w api && npm run build -w backend && npm run build -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
