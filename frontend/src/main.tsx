@@ -6,6 +6,7 @@ type Agent={id:string;name:string;role:string;state:string;position:{x:number;y:
 type Task={id:string;title:string;agentId:string;status:string;createdAt:string};
 
 const API=(import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
+const TASK_TARGET=12;
 const fallbackAgents:Agent[]=[
 {id:'manager',name:'Alex',role:'Manager',state:'working',position:{x:18,y:18},home:{x:18,y:18}},
 {id:'sysadmin',name:'Sam',role:'Senior System Administrator',state:'working',position:{x:20,y:43},home:{x:20,y:43}},
@@ -24,6 +25,7 @@ function App(){
  const state=async(s:string)=>{try{const r=await fetch(`${API}/agents/${selected}/state`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:s})});if(!r.ok)throw 0;await refresh()}catch{const a=agents.find(x=>x.id===selected);const destination=s==='break'?{x:13,y:72}:s==='lunch'?{x:75,y:73}:a?.home;updateLocal(selected,{state:s,destination})}};
  const assign=async()=>{if(!taskTitle.trim())return;try{const r=await fetch(`${API}/tasks`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agentId:selected,title:taskTitle})});if(!r.ok)throw 0;setTaskTitle('');await refresh()}catch{const t={id:crypto.randomUUID(),agentId:selected,title:taskTitle,status:'active',createdAt:new Date().toISOString()};setTasks(prev=>[t,...prev]);updateLocal(selected,{state:'assigned-task',currentTask:taskTitle,destination:agents.find(a=>a.id===selected)?.home});setTaskTitle('')}};
  const workerAgents=useMemo(()=>agents.filter(a=>a.id!=='manager'),[agents]);
+ const completedByAgent=useMemo(()=>Object.fromEntries(agents.map(a=>[a.id,Math.min(TASK_TARGET,tasks.filter(t=>t.agentId===a.id&&t.status.toLowerCase()==='done').length)])),[agents,tasks]);
  return <div className="app">
   <header><div><h1>AI AGENTS OFFICE</h1><p>Live multi-agent operations floor</p></div><div className="status"><span className="dot"/> SYSTEM ONLINE</div></header>
   <main>
@@ -38,12 +40,12 @@ function App(){
       <Desk x={16} y={16}/><Desk x={17} y={42}/><Desk x={39} y={42}/><Desk x={62} y={42}/><Desk x={30} y={57}/><Desk x={55} y={57}/>
       <div className="sofa" style={{left:'11%',top:'79%'}}>▰▰</div><div className="coffee" style={{left:'33%',top:'81%'}}>☕</div>
       <div className="table" style={{left:'67%',top:'80%'}}>▭</div><div className="coffee" style={{left:'84%',top:'82%'}}>☕</div>
-      {agents.map(a=><AgentSprite key={a.id} agent={a}/>)}
+      {agents.map(a=><AgentSprite key={a.id} agent={a} completed={completedByAgent[a.id]??0}/>)}
     </div>
    </section>
    <aside>
     <div className="panel"><h2>Manager Control</h2><label>Agent</label><select value={selected} onChange={e=>setSelected(e.target.value)}>{workerAgents.map(a=><option key={a.id} value={a.id}>{a.role}</option>)}</select><button onClick={call}>Call to Manager</button><div className="row"><button className="secondary" onClick={()=>state('working')}>Work</button><button className="secondary" onClick={()=>state('break')}>Break</button><button className="secondary" onClick={()=>state('lunch')}>Lunch</button></div><input placeholder="Assign a task..." value={taskTitle} onChange={e=>setTaskTitle(e.target.value)}/><button onClick={assign}>Assign Task</button></div>
-    <div className="panel"><h2>Agent Status</h2>{workerAgents.map(a=><div className="agent-row" key={a.id}><div><b>{a.name}</b><span>{a.role}</span></div><em className={`badge ${a.state}`}>{a.state}</em></div>)}</div>
+    <div className="panel"><h2>Agent Status</h2>{workerAgents.map(a=><div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><MiniProgress completed={completedByAgent[a.id]??0}/></div><em className={`badge ${a.state}`}>{a.state}</em></div>)}</div>
     <div className="panel"><h2>Active Tasks</h2>{tasks.filter(t=>t.status!=='done').length===0?<p className="muted">No active tasks</p>:tasks.filter(t=>t.status!=='done').map(t=><div className="task" key={t.id}><b>{t.title}</b><span>{agents.find(a=>a.id===t.agentId)?.name}</span></div>)}</div>
    </aside>
   </main>
@@ -52,6 +54,8 @@ function App(){
 
 function Room({x,y,w,h,title,cls}:{x:number;y:number;w:number;h:number;title:string;cls:string}){return <div className={`room ${cls}`} style={{left:`${x}%`,top:`${y}%`,width:`${w}%`,height:`${h}%`}}><span>{title}</span></div>}
 function Desk({x,y}:{x:number;y:number}){return <div className="desk" style={{left:`${x}%`,top:`${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>}
-function AgentSprite({agent}:{agent:Agent}){const p=agent.destination??agent.position; const initial=agent.name[0]; return <div className="agent" title={`${agent.role} • ${agent.state}`} style={{left:`${p.x}%`,top:`${p.y}%`}}><div className="bubble">{agent.currentTask??agent.state}</div><div className={`avatar ${agent.id}`}>{initial}</div><small>{agent.name}</small></div>}
+function TaskLights({completed}:{completed:number}){const pct=Math.round((completed/TASK_TARGET)*100);return <div className="task-progress"><div className="task-lights" aria-label={`${completed} of ${TASK_TARGET} tasks completed`}>{Array.from({length:TASK_TARGET},(_,i)=><i key={i} className={i<completed?'on':'off'}/>)}</div><span>{completed}/{TASK_TARGET} task <b>{pct}%</b></span></div>}
+function MiniProgress({completed}:{completed:number}){return <div className="mini-progress"><div>{Array.from({length:TASK_TARGET},(_,i)=><i key={i} className={i<completed?'on':'off'}/>)}</div><span>{completed}/{TASK_TARGET} task</span></div>}
+function AgentSprite({agent,completed}:{agent:Agent;completed:number}){const p=agent.destination??agent.position; const initial=agent.name[0]; return <div className="agent" title={`${agent.role} • ${agent.state}`} style={{left:`${p.x}%`,top:`${p.y}%`}}><div className="bubble">{agent.currentTask??agent.state}</div><div className={`avatar ${agent.id}`}>{initial}</div><small>{agent.name}</small>{agent.id!=='manager'&&<TaskLights completed={completed}/>}</div>}
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
