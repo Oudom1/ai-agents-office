@@ -1,0 +1,46 @@
+name: Patch frontend authenticated API
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/auth-main-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add authenticated API helper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('frontend/src/main.tsx')
+          s=p.read_text()
+          old="const API = (import.meta.env.VITE_API_URL || '').replace(/\\\/$/, '') + '/api';"
+          new="""const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\\\/$/, '');
+          const API = API_BASE + '/api';
+          const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
+          function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+            const headers = new Headers(init.headers || {});
+            const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+            if (token) headers.set('Authorization', `Bearer ${token}`);
+            return fetch(input, {...init, headers});
+          }"""
+          if old not in s:
+              raise SystemExit('API declaration not found')
+          s=s.replace(old,new,1)
+          s=s.replace("fetch(`${API}", "authFetch(`${API}")
+          p.write_text(s)
+          PY
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/auth-main-patch.yml
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/main.tsx .github/workflows/auth-main-patch.yml
+          git commit -m "Use authenticated shared backend from frontend"
+          git push
