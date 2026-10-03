@@ -22,30 +22,23 @@ jobs:
           from pathlib import Path
           p = Path('frontend/src/main.tsx')
           s = p.read_text()
-
           replacements = {
-            "const KAI_PROVIDER_PENDING = 'Waiting for real free video provider integration. FREE ONLY is enabled; no paid fallback will be used.';":
-              "const KAI_PROVIDER_PENDING = 'Free video router is waiting for a real provider integration. Route: PixVerse Free → Leonardo Free → Runway Free/Trial. FREE ONLY; no paid fallback.';",
-            "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Google Drive', 'Automation'],":
-              "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Leonardo Free', 'Runway Free/Trial', 'Google Drive', 'Automation'],",
-            "if (/video|cartoon|comedy|heygen|pixverse|reel|short|promo/.test(q)) return 'implement';":
-              "if (/video|cartoon|comedy|pixverse|leonardo|runway|reel|short|promo/.test(q)) return 'implement';",
+            "const KAI_PROVIDER_PENDING = 'Waiting for real free video provider integration. FREE ONLY is enabled; no paid fallback will be used.';": "const KAI_PROVIDER_PENDING = 'Free video router is waiting for a real provider integration. Route: PixVerse Free → Leonardo Free → Runway Free/Trial. FREE ONLY; no paid fallback.';",
+            "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Google Drive', 'Automation'],": "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Leonardo Free', 'Runway Free/Trial', 'Google Drive', 'Automation'],",
+            "if (/video|cartoon|comedy|heygen|pixverse|reel|short|promo/.test(q)) return 'implement';": "if (/video|cartoon|comedy|pixverse|leonardo|runway|reel|short|promo/.test(q)) return 'implement';",
             "provider: 'PixVerse Free'": "provider: 'Free Video Router'",
             "provider: isKai ? 'PixVerse Free'": "provider: isKai ? 'Free Video Router'",
             "provider: dueRecurring.provider ?? 'PixVerse Free'": "provider: dueRecurring.provider ?? 'Free Video Router'",
-            "<p className=\"kai-note\">Alex prepares comedy-cartoon video briefs for Kai. PixVerse Free is the selected UI route, but no real provider API is connected yet. Kai remains READY and tasks wait for provider integration. No task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>Comedy Cartoon</span><span>PixVerse Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Provider Pending</span></div>":
-              "<p className=\"kai-note\">Free routing order: PixVerse Free → Leonardo Free → Runway Free/Trial. No real provider API is connected yet, so this router is policy/UI only. Kai stays READY and no task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>PixVerse Free</span><span>Leonardo Free</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div>",
+            "blocker: kaiBlocked ? KAI_PROVIDER_BLOCKER : undefined": "blocker: undefined",
+            "<p className=\"kai-note\">Alex prepares comedy-cartoon video briefs for Kai. PixVerse Free is the selected UI route, but no real provider API is connected yet. Kai remains READY and tasks wait for provider integration. No task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>Comedy Cartoon</span><span>PixVerse Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Provider Pending</span></div>": "<p className=\"kai-note\">Free routing order: PixVerse Free → Leonardo Free → Runway Free/Trial. No real provider API is connected yet, so this router is policy/UI only. Kai stays READY and no task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>PixVerse Free</span><span>Leonardo Free</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div>",
             "Waiting for real free provider integration…": "Free router waiting for provider integration…",
             "Waiting for free provider integration": "Free router waiting for provider integration",
             "HeyGen Free quota blocked": "Free provider integration pending",
             "HeyGen Free Avatar IV monthly limit reached": "Free provider integration pending"
           }
-
           for old, new in replacements.items():
               if old in s:
                   s = s.replace(old, new)
-
-          # Remove any remaining HeyGen labels without pretending another API is connected.
           s = s.replace('HeyGen Free', 'Free Video Router')
           p.write_text(s)
           PY
@@ -55,5 +48,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/src/main.tsx
           git diff --cached --quiet && exit 0
-          git commit -m "Route Kai through free video providers"
+          git commit -m "Fix Kai free router build"
           git push
