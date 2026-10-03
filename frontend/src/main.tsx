@@ -30,6 +30,7 @@ type Task = {
   recurringEveryHours?: number;
   nextRunAt?: string;
   sourceTaskId?: string;
+  blocker?: string;
 };
 
 const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
@@ -39,9 +40,11 @@ const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/folders/1SDKs0s
 const KAI_REFRESH_HOURS = 4;
 const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
 const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
+const WORK_START_HOUR = 8;
+const WORK_END_HOUR = 18;
 
 const fallbackAgents: Agent[] = [
-  {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 18, y: 18}, home: {x: 18, y: 18}},
+  {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 13, y: 18}, home: {x: 13, y: 18}},
   {id: 'sysadmin', name: 'Sam', role: 'Senior System Administrator', state: 'working', position: {x: 20, y: 43}, home: {x: 20, y: 43}},
   {id: 'security', name: 'Mina', role: 'Senior Security', state: 'working', position: {x: 42, y: 43}, home: {x: 42, y: 43}},
   {id: 'cloud', name: 'Noah', role: 'Senior Cloud Operator', state: 'working', position: {x: 65, y: 43}, home: {x: 65, y: 43}},
@@ -49,6 +52,16 @@ const fallbackAgents: Agent[] = [
   {id: 'implement', name: 'Kai', role: 'Senior Implement', state: 'working', position: {x: 51, y: 59}, home: {x: 51, y: 59}},
   {id: 'developer', name: 'Leo', role: 'Senior Developer', state: 'working', position: {x: 75, y: 59}, home: {x: 75, y: 59}}
 ];
+
+const agentSkills: Record<string, string[]> = {
+  manager: ['Management', 'Researcher', 'Task Assignment', 'Prioritization', 'Blocker Resolution'],
+  sysadmin: ['Windows', 'Active Directory', 'Microsoft 365', 'Troubleshooting', 'PowerShell'],
+  security: ['Security', 'IAM', 'Access Review', 'Graylog', 'Compliance'],
+  cloud: ['Cloud', 'Azure', 'Infrastructure', 'Networking', 'Deployment'],
+  qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review'],
+  implement: ['Implementation', 'Video', 'HeyGen', 'Google Drive', 'Automation'],
+  developer: ['React', 'TypeScript', 'Python', 'Java', 'GitHub', 'Portfolio']
+};
 
 const kaiVideoTemplates = [
   {name: 'Funny Cartoon', prompt: 'Create a 10-second funny cartoon video. A cute office worker spills coffee on the desk, looks shocked, then pretends nothing happened while coworkers stare. Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous tone, smooth animation, vertical 9:16.'},
@@ -88,6 +101,16 @@ function makeItComedyPrompt() {
 function loadLocalTasks(): Task[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
+}
+
+function bestAgentForTask(title: string) {
+  const q = title.toLowerCase();
+  if (/portfolio|react|typescript|python|java|code|developer|github|website|web/.test(q)) return 'developer';
+  if (/video|cartoon|heygen|reel|short|promo/.test(q)) return 'implement';
+  if (/security|iam|access|graylog|audit|compliance|vulnerability/.test(q)) return 'security';
+  if (/cloud|azure|network|infrastructure|deploy|server/.test(q)) return 'cloud';
+  if (/test|uat|qa|quality|validate|verification/.test(q)) return 'qa';
+  return 'sysadmin';
 }
 
 function App() {
@@ -135,12 +158,29 @@ function App() {
   const updateLocal = (id: string, patch: Partial<Agent>) => setAgents(prev => prev.map(a => a.id === id ? {...a, ...patch} : a));
   const patchTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? {...t, ...patch} : t));
 
+  useEffect(() => {
+    const hour = new Date(now).getHours();
+    const inWorkHours = hour >= WORK_START_HOUR && hour < WORK_END_HOUR;
+    setAgents(prev => prev.map(a => {
+      if (a.id === 'manager' || a.currentTask) return a;
+      if (inWorkHours) {
+        if (a.state === 'break' || a.state === 'coffee' || a.state === 'off-duty') return {...a, state: 'working', destination: a.home};
+        return a;
+      }
+      if (a.state === 'working') {
+        const coffeeSide = a.id.charCodeAt(0) % 2 === 0;
+        return {...a, state: coffeeSide ? 'coffee' : 'off-duty', destination: coffeeSide ? {x: 33, y: 81} : {x: 13, y: 79}};
+      }
+      return a;
+    }));
+  }, [Math.floor(now / 60000)]);
+
   const call = async () => {
     try {
       const r = await fetch(`${API}/manager/call/${selected}`, {method: 'POST'});
       if (!r.ok) throw 0;
       await refresh();
-    } catch { updateLocal(selected, {state: 'called', destination: {x: 18, y: 15}}); }
+    } catch { updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}}); }
   };
 
   const state = async (s: string) => {
@@ -152,7 +192,7 @@ function App() {
       await refresh();
     } catch {
       const a = agents.find(x => x.id === selected);
-      const destination = s === 'break' ? {x: 13, y: 72} : s === 'lunch' ? {x: 75, y: 73} : a?.home;
+      const destination = s === 'break' ? {x: 13, y: 79} : s === 'lunch' ? {x: 75, y: 80} : a?.home;
       updateLocal(selected, {state: s, currentTask: undefined, destination});
     }
   };
@@ -160,10 +200,10 @@ function App() {
   const startLocalTaskMotion = (agentId: string, title: string, taskId: string) => {
     const a = agents.find(x => x.id === agentId);
     if (!a) return;
-    updateLocal(agentId, {state: 'assigned-task', currentTask: title, destination: {x: 48, y: 18}});
+    updateLocal(agentId, {state: 'assigned-task', currentTask: title, destination: {x: 35, y: 18}});
     patchTask(taskId, {phase: agentId === 'implement' ? 'free-check' : 'received'});
     window.setTimeout(() => {
-      updateLocal(agentId, {state: 'preparing', currentTask: title, destination: {x: 48, y: 24}});
+      updateLocal(agentId, {state: 'preparing', currentTask: title, destination: {x: 35, y: 24}});
       patchTask(taskId, {phase: 'preparing'});
     }, 1200);
     window.setTimeout(() => {
@@ -203,28 +243,35 @@ function App() {
     setNotice(`Alex assigned ${name} to Leo`);
   };
 
-  const assign = async () => {
+  const assign = async (forcedAgentId?: string) => {
     if (!taskTitle.trim()) return;
     const title = taskTitle.trim();
+    const targetAgent = forcedAgentId ?? selected;
     try {
-      const r = await fetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: selected, title})});
+      const r = await fetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
       setTaskTitle('');
-      setNotice(selected === 'implement' ? 'Kai started free video generation' : selected === 'developer' ? 'Leo started development work' : 'Task assigned');
       await refresh();
     } catch {
-      addLocalTask(selected, title);
+      addLocalTask(targetAgent, title);
       setTaskTitle('');
-      const name = agents.find(a => a.id === selected)?.name ?? 'Agent';
-      setNotice(selected === 'implement' ? 'Kai is checking free quota and preparing the video' : selected === 'developer' ? 'Leo received the development task and started coding' : `${name} started the task`);
     }
+    const name = agents.find(a => a.id === targetAgent)?.name ?? 'Agent';
+    setSelected(targetAgent);
+    setNotice(`Alex assigned the task to ${name} based on skill match`);
+  };
+
+  const alexAutoAssign = () => {
+    if (!taskTitle.trim()) return;
+    const target = bestAgentForTask(taskTitle.trim());
+    assign(target);
   };
 
   const completeTask = (task: Task, auto = false) => {
     const isKai = task.agentId === 'implement';
     const isLeo = task.agentId === 'developer';
     patchTask(task.id, {
-      status: 'done', phase: 'completed', completedAt: new Date().toISOString(),
+      status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
       driveUrl: isKai ? GOOGLE_DRIVE_PLACEHOLDER : undefined,
       nextRunAt: isKai ? new Date(Date.now() + KAI_REFRESH_MS).toISOString() : undefined,
       resultMessage: isKai
@@ -244,8 +291,16 @@ function App() {
     setNotice(isKai ? 'Complete — video ready, open Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
   };
 
+  const toggleBlocker = (task: Task) => {
+    const name = agents.find(a => a.id === task.agentId)?.name ?? 'Agent';
+    const blocker = task.blocker ? undefined : `${name} needs Alex support / decision to continue this task.`;
+    patchTask(task.id, {blocker});
+    updateLocal(task.agentId, {state: blocker ? 'blocked' : 'working-task'});
+    setNotice(blocker ? `${name} raised a blocker to Alex` : `${name} blocker cleared`);
+  };
+
   useEffect(() => {
-    const dueTask = tasks.find(t => t.status !== 'done' && t.phase === 'working' && getRemainingSeconds(t, now) <= 0);
+    const dueTask = tasks.find(t => t.status !== 'done' && t.phase === 'working' && !t.blocker && getRemainingSeconds(t, now) <= 0);
     if (dueTask) completeTask(dueTask, true);
   }, [tasks, now]);
 
@@ -271,6 +326,7 @@ function App() {
   const completedByAgent = useMemo(() => Object.fromEntries(agents.map(a => [a.id, Math.min(TASK_TARGET, tasks.filter(t => t.agentId === a.id && t.status.toLowerCase() === 'done').length)])), [agents, tasks]);
   const activeTasks = tasks.filter(t => t.status !== 'done');
   const doneTasks = tasks.filter(t => t.status === 'done');
+  const blockers = activeTasks.filter(t => t.blocker);
 
   const selectedPlaceholder = selected === 'implement' ? 'Give Kai a video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
@@ -285,20 +341,18 @@ function App() {
       <main>
         <section className="office-card">
           <div className="office">
-            <Room x={3} y={4} w={29} h={25} title="MANAGER OFFICE" cls="manager-room" />
-            <Room x={34} y={4} w={28} h={25} title="TASK BOARD" cls="task-room" />
-            <Room x={64} y={4} w={33} h={25} title="ACTIVE TASKS" cls="active-room" />
+            <Room x={3} y={4} w={20} h={25} title="MANAGER OFFICE" cls="manager-room" />
+            <Room x={25} y={4} w={22} h={25} title="TASK BOARD" cls="task-room" />
+            <Room x={49} y={4} w={22} h={25} title="ACTIVE TASKS" cls="active-room" />
+            <Room x={73} y={4} w={24} h={25} title={`BLOCKERS (${blockers.length})`} cls="active-room" />
             <Room x={3} y={33} w={94} h={34} title="OPERATIONS FLOOR" cls="ops-room" />
             <Room x={3} y={70} w={44} h={25} title="LOUNGE / BREAK" cls="lounge-room" />
             <Room x={50} y={70} w={47} h={25} title="CAFETERIA / LUNCH" cls="cafe-room" />
 
-            <Desk x={16} y={16} />
-            <Desk x={17} y={42} />
-            <Desk x={39} y={42} />
-            <Desk x={62} y={42} />
-            <Desk x={25} y={57} />
-            <Desk x={49} y={57} />
-            <Desk x={73} y={57} />
+            <Desk x={12} y={16} /><Desk x={17} y={42} /><Desk x={39} y={42} /><Desk x={62} y={42} /><Desk x={25} y={57} /><Desk x={49} y={57} /><Desk x={73} y={57} />
+            <div style={{position:'absolute',left:'74.5%',top:'9%',width:'20.5%',height:'16%',zIndex:2,overflow:'hidden',fontSize:'8px',color:'#ffbec7'}}>
+              {blockers.length === 0 ? <span style={{color:'#7890a7'}}>No blockers reported</span> : blockers.slice(0,3).map(t => <div key={t.id} style={{marginBottom:'5px',padding:'4px 5px',border:'1px solid #6d3440',borderRadius:'5px',background:'#331923cc'}}><b>{agents.find(a=>a.id===t.agentId)?.name}</b> — {t.blocker}</div>)}
+            </div>
 
             <div className="sofa" style={{left: '11%', top: '79%'}}>▰▰</div>
             <div className="coffee" style={{left: '33%', top: '81%'}}>☕</div>
@@ -310,111 +364,44 @@ function App() {
 
         <aside>
           <div className="panel manager-control">
-            <h2>Manager Control</h2>
+            <h2>Alex • Manager Control</h2>
+            <div className="skill-tags">{agentSkills.manager.map(s => <span key={s}>{s}</span>)}</div>
+            <p className="muted">Work schedule: 08:00–18:00. Outside work hours, idle agents can rest in the lounge or drink coffee.</p>
             <label>Agent</label>
-            <select value={selected} onChange={e => setSelected(e.target.value)}>
-              {workerAgents.map(a => <option key={a.id} value={a.id}>{a.role}</option>)}
-            </select>
+            <select value={selected} onChange={e => setSelected(e.target.value)}>{workerAgents.map(a => <option key={a.id} value={a.id}>{a.role}</option>)}</select>
             <button onClick={call}>Call to Manager</button>
-            <div className="row">
-              <button className="secondary" onClick={() => state('working')}>Work</button>
-              <button className="secondary" onClick={() => state('break')}>Break</button>
-              <button className="secondary" onClick={() => state('lunch')}>Lunch</button>
-            </div>
-            <div className="task-compose">
-              <input placeholder={selectedPlaceholder} value={taskTitle} onChange={e => setTaskTitle(e.target.value.slice(0, 240))} onKeyDown={e => { if (e.key === 'Enter') assign(); }} />
-              <span>{taskTitle.length}/240</span>
-            </div>
-            <button className="assign-btn" disabled={!taskTitle.trim()} onClick={assign}>{selectedButton}</button>
+            <div className="row"><button className="secondary" onClick={() => state('working')}>Work</button><button className="secondary" onClick={() => state('break')}>Break</button><button className="secondary" onClick={() => state('lunch')}>Lunch</button></div>
+            <div className="task-compose"><input placeholder={selectedPlaceholder} value={taskTitle} onChange={e => setTaskTitle(e.target.value.slice(0, 240))} onKeyDown={e => { if (e.key === 'Enter') assign(); }} /><span>{taskTitle.length}/240</span></div>
+            <button className="assign-btn" disabled={!taskTitle.trim()} onClick={() => assign()}>{selectedButton}</button>
+            <button className="secondary" disabled={!taskTitle.trim()} onClick={alexAutoAssign}>Alex Auto-Assign by Skill</button>
           </div>
 
-          {selected === 'implement' && (
-            <div className="panel kai-panel">
-              <div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div>
-              <p className="kai-note">Click a quick template to send a new video task directly to Kai. IT Comedy creates a fresh IT scenario on every click and keeps the 4-hour refresh cycle enabled.</p>
-              <div className="skill-tags"><span>HeyGen Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Refresh Every 4h</span></div>
-              <label>Quick video templates</label>
-              <div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div>
-            </div>
-          )}
+          {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><p className="kai-note">Click a quick template to send a new video task directly to Kai. IT Comedy creates a fresh IT scenario on every click and keeps the 4-hour refresh cycle enabled.</p><div className="skill-tags"><span>HeyGen Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Refresh Every 4h</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
-          {selected === 'developer' && (
-            <div className="panel developer-panel">
-              <div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div>
-              <p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p>
-              <div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span></div>
-              <label>Quick development tasks</label>
-              <div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div>
-            </div>
-          )}
+          {selected === 'developer' && <div className="panel developer-panel"><div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div><p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p><div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span></div><label>Quick development tasks</label><div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
-          <div className="panel">
-            <div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>
-            {workerAgents.map(a => (
-              <div className="agent-row" key={a.id}>
-                <div className="agent-info">
-                  <b>{a.name}</b><span>{a.role}</span>
-                  {a.id === 'implement' && <span className="kai-skill-line">Free Video • HeyGen Free • Drive</span>}
-                  {a.id === 'developer' && <span className="developer-skill-line" style={{color: '#ffc878', fontSize: '8px', fontWeight: 700}}>React • TypeScript • Portfolio • GitHub</span>}
-                  <MiniProgress completed={completedByAgent[a.id] ?? 0} />
-                </div>
-                <em className={`badge ${a.state}`}>{friendlyState(a.state)}</em>
-              </div>
-            ))}
-          </div>
+          <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a => <div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><span style={{fontSize:'8px',color:'#6f8ca5'}}>{agentSkills[a.id].join(' • ')}</span><MiniProgress completed={completedByAgent[a.id] ?? 0} /></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
 
-          <div className="panel tasks-panel">
-            <div className="panel-title"><h2>Active Tasks</h2>{doneTasks.length > 0 && <button className="text-btn" onClick={clearDone}>Clear done</button>}</div>
-            {activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.map(t => (
-              <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} />
-            ))}
-          </div>
+          <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2>{doneTasks.length > 0 && <button className="text-btn" onClick={clearDone}>Clear done</button>}</div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => toggleBlocker(t)} />)}</div>
 
-          <div className="panel results-panel">
-            <div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>
-            {doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks]
-              .sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime())
-              .slice(0, 6).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}
-          </div>
+          <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0, 6).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
         </aside>
       </main>
     </div>
   );
 }
 
-function ActiveTaskCard({task, agentName, now, onComplete}: {task: Task; agentName: string; now: number; onComplete: () => void;}) {
+function ActiveTaskCard({task, agentName, now, onComplete, onBlocker}: {task: Task; agentName: string; now: number; onComplete: () => void; onBlocker: () => void;}) {
   const remaining = getRemainingSeconds(task, now);
   const progress = getProgressPercent(task, now);
   const isKai = task.agentId === 'implement';
   const isLeo = task.agentId === 'developer';
-  return (
-    <div className="task-card">
-      <div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div>
-      <div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">AUTO 4H</span>}{isLeo && <span className="task-provider">DEV</span>}</div>
-      <b>{task.title}</b>
-      <div className="task-timer">
-        <div className="timer-bar"><i style={{width: `${progress}%`}} /></div>
-        <div className="timer-line"><span>{task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div>
-      </div>
-      <div className="task-bottom"><span>{timeAgo(task.createdAt)}</span>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div>
-    </div>
-  );
+  return <div className="task-card"><div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{task.blocker ? 'Blocked' : friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">AUTO 4H</span>}{isLeo && <span className="task-provider">DEV</span>}</div><b>{task.title}</b>{task.blocker && <p className="result-msg" style={{color:'#ff9eaa'}}>⚠ {task.blocker}</p>}<div className="task-timer"><div className="timer-bar"><i style={{width: `${progress}%`}} /></div><div className="timer-line"><span>{task.blocker ? 'Waiting for Alex…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.blocker ? 'BLOCKED' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div></div><div className="task-bottom"><span>{timeAgo(task.createdAt)}</span><div style={{display:'flex',gap:'5px'}}><button onClick={onBlocker} style={{background:task.blocker?'#3c5b32':'#5a2832',borderColor:task.blocker?'#60834e':'#8f3d4b'}}>{task.blocker ? '✓ Clear Blocker' : '⚠ Raise Blocker'}</button>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div></div></div>;
 }
 
-function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) {
-  return (
-    <div className="result-card">
-      <div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div>
-      <div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div>
-      <b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p>
-      <div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>
-      {task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}
-      {task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}
-    </div>
-  );
-}
+function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) { return <div className="result-card"><div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div><b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p><div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>{task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}{task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}</div>; }
 
-function friendlyState(state: string) { if (state === 'assigned-task') return 'assigned'; if (state === 'working-task') return 'working'; return state; }
+function friendlyState(state: string) { if (state === 'assigned-task') return 'assigned'; if (state === 'working-task') return 'working'; if (state === 'off-duty') return 'resting'; return state; }
 function friendlyPhase(phase?: string) { if (phase === 'free-check') return 'Free Check'; if (phase === 'received') return 'Received'; if (phase === 'preparing') return 'Preparing'; if (phase === 'working') return 'Working'; if (phase === 'completed') return 'Completed'; return 'Queued'; }
 function timeAgo(value: string) { const s = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (s < 60) return `${s}s ago`; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; return `${Math.floor(m / 60)}h ago`; }
 function getRemainingSeconds(task: Task, now: number) { if (!task.startedAt || !task.durationSec) return task.durationSec ?? 0; const elapsed = Math.floor((now - new Date(task.startedAt).getTime()) / 1000); return Math.max(0, task.durationSec - elapsed); }
@@ -425,12 +412,6 @@ function Room({x, y, w, h, title, cls}: {x: number; y: number; w: number; h: num
 function Desk({x, y}: {x: number; y: number}) { return <div className="desk" style={{left: `${x}%`, top: `${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>; }
 function TaskLights({completed}: {completed: number}) { const pct = Math.round((completed / TASK_TARGET) * 100); return <div className="task-progress"><div className="task-lights" aria-label={`${completed} of ${TASK_TARGET} tasks completed`}>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task <b>{pct}%</b></span></div>; }
 function MiniProgress({completed}: {completed: number}) { return <div className="mini-progress"><div>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task</span></div>; }
-function AgentSprite({agent, completed}: {agent: Agent; completed: number}) {
-  const p = agent.destination ?? agent.position;
-  const initial = agent.name[0];
-  const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.currentTask ?? agent.state;
-  const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined;
-  return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>;
-}
+function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? 'Blocked — need Alex' : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
