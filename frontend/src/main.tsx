@@ -27,12 +27,17 @@ type Task = {
   completedAt?: string;
   driveUrl?: string;
   resultMessage?: string;
+  recurringEveryHours?: number;
+  nextRunAt?: string;
+  sourceTaskId?: string;
 };
 
 const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
 const TASK_TARGET = 12;
 const STORAGE_KEY = 'ai-agents-office-tasks-v3';
-const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/my-drive';
+const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/folders/1SDKs0stvoeIkYIhEcP5znRq7-tSyaEpl';
+const KAI_REFRESH_HOURS = 4;
+const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 18, y: 18}, home: {x: 18, y: 18}},
@@ -178,7 +183,8 @@ function App() {
         createdAt: new Date().toISOString(),
         provider: isKai ? 'HeyGen Free' : 'Internal Demo',
         freeOnly: isKai,
-        durationSec: isKai ? 24 : 12
+        durationSec: isKai ? 24 : 12,
+        recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined
       };
       setTasks(prev => [t, ...prev]);
       startLocalTaskMotion(selected, title, id);
@@ -194,8 +200,9 @@ function App() {
       phase: 'completed',
       completedAt: new Date().toISOString(),
       driveUrl: isKai ? GOOGLE_DRIVE_PLACEHOLDER : undefined,
+      nextRunAt: isKai ? new Date(Date.now() + KAI_REFRESH_MS).toISOString() : undefined,
       resultMessage: isKai
-        ? 'Complete — Kai finished the free video generation workflow. Open Google Drive to review the video output.'
+        ? 'Complete — Kai finished this cycle. The same video task is scheduled to refresh again in 4 hours.'
         : 'Complete — task finished successfully.'
     });
 
@@ -216,6 +223,38 @@ function App() {
   useEffect(() => {
     const dueTask = tasks.find(t => t.status !== 'done' && t.phase === 'working' && getRemainingSeconds(t, now) <= 0);
     if (dueTask) completeTask(dueTask, true);
+  }, [tasks, now]);
+
+  useEffect(() => {
+    const dueRecurring = tasks.find(
+      t =>
+        t.agentId === 'implement' &&
+        t.status === 'done' &&
+        t.nextRunAt &&
+        new Date(t.nextRunAt).getTime() <= now &&
+        !tasks.some(a => a.status !== 'done' && a.agentId === 'implement' && (a.sourceTaskId === t.id || a.title === t.title))
+    );
+    if (!dueRecurring) return;
+
+    const id = crypto.randomUUID();
+    const nextTask: Task = {
+      id,
+      agentId: 'implement',
+      title: dueRecurring.title,
+      status: 'active',
+      phase: 'queued',
+      createdAt: new Date().toISOString(),
+      provider: dueRecurring.provider ?? 'HeyGen Free',
+      freeOnly: true,
+      durationSec: dueRecurring.durationSec ?? 24,
+      recurringEveryHours: KAI_REFRESH_HOURS,
+      sourceTaskId: dueRecurring.id
+    };
+
+    setTasks(prev => prev.map(t => (t.id === dueRecurring.id ? {...t, nextRunAt: undefined} : t)));
+    setTasks(prev => [nextTask, ...prev]);
+    startLocalTaskMotion('implement', nextTask.title, id);
+    setNotice('Alex refreshed Kai’s video task — new 4-hour cycle started');
   }, [tasks, now]);
 
   const clearDone = () => setTasks(prev => prev.filter(t => t.status !== 'done'));
@@ -289,7 +328,7 @@ function App() {
             </div>
             <div className="task-compose">
               <input
-                placeholder={selected === 'implement' ? 'Ask Kai for a free video prompt...' : 'Assign a task...'}
+                placeholder={selected === 'implement' ? 'Give Kai a video task...' : 'Assign a task...'}
                 value={taskTitle}
                 onChange={e => setTaskTitle(e.target.value.slice(0, 240))}
                 onKeyDown={e => {
@@ -299,7 +338,7 @@ function App() {
               <span>{taskTitle.length}/240</span>
             </div>
             <button className="assign-btn" disabled={!taskTitle.trim()} onClick={assign}>
-              {selected === 'implement' ? 'Ask Kai to Generate' : 'Assign Task'}
+              {selected === 'implement' ? 'Send Task to Kai' : 'Assign Task'}
             </button>
           </div>
 
@@ -310,12 +349,13 @@ function App() {
                 <span>FREE-ONLY</span>
               </div>
               <p className="kai-note">
-                Kai uses free-only routing. Estimated generation time is about 24 seconds. When complete, the task will show a complete message and a Google Drive link.
+                Alex delegates video work directly to Kai. Kai keeps the task in the dashboard and automatically refreshes the same content every 4 hours. Free-only routing stays enabled, with results linked to Kai Video Workspace in Google Drive.
               </p>
               <div className="skill-tags">
                 <span>HeyGen Free</span>
                 <span>Google Drive</span>
                 <span>No Paid Fallback</span>
+                <span>Refresh Every 4h</span>
               </div>
               <label>Quick video templates</label>
               <div className="template-grid">
@@ -410,6 +450,7 @@ function ActiveTaskCard({
       <div className="task-meta">
         {task.provider && <span className="task-provider">{task.provider}</span>}
         {task.freeOnly && <span className="free-badge">FREE ONLY</span>}
+        {isKai && <span className="task-provider">AUTO 4H</span>}
       </div>
       <b>{task.title}</b>
       <div className="task-timer">
@@ -443,6 +484,9 @@ function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) {
       <div className="task-bottom">
         <span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span>
       </div>
+      {task.nextRunAt && (
+        <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>
+      )}
       {task.driveUrl && (
         <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">
           Open Video in Google Drive
@@ -486,6 +530,14 @@ function getProgressPercent(task: Task, now: number) {
   if (!task.startedAt) return task.phase === 'preparing' ? 28 : task.phase === 'free-check' ? 8 : task.phase === 'received' ? 16 : 4;
   const elapsed = Math.max(0, Math.floor((now - new Date(task.startedAt).getTime()) / 1000));
   return Math.max(4, Math.min(100, Math.round((elapsed / task.durationSec) * 100)));
+}
+
+function formatCountdown(value: string) {
+  const diff = Math.max(0, new Date(value).getTime() - Date.now());
+  const totalMinutes = Math.floor(diff / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
 }
 
 function formatDuration(value: number) {
