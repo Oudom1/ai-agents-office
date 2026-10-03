@@ -19,7 +19,7 @@
 
   function buildBrief(seed) {
     const clean = (seed || ideas[Math.floor(Math.random() * ideas.length)]).trim().slice(0, 82);
-    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. FREE ONLY; no paid fallback; upload real final MP4 to Drive.`.slice(0, 240);
+    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. FREE ONLY; try PixVerse first; no paid fallback; upload real final MP4 to Drive.`.slice(0, 240);
   }
 
   function showPrepToast(message) {
@@ -57,7 +57,7 @@
       if (!(input instanceof HTMLInputElement)) return;
       const brief = buildBrief('a fresh funny IT office mishap selected by Alex');
       setReactInput(input, brief);
-      showPrepToast('Alex prepared Kai’s Comedy Cartoon brief, but generation is BLOCKED: no free video provider is currently available.');
+      showPrepToast('Alex prepared Kai’s Comedy Cartoon brief. PixVerse is the first-choice provider, but it is not connected to this workspace yet.');
     }, 150);
   }
 
@@ -71,12 +71,15 @@
       <div style="font-size:8px;font-weight:900;letter-spacing:.8px;color:#75e9ff">ALEX → KAI • FREE VIDEO ROUTER</div>
       <div style="font-size:11px;font-weight:900;color:#fff;margin:4px 0 4px">Comedy Cartoon</div>
       <div style="display:grid;gap:3px;font-size:7px;line-height:1.35">
-        <div style="color:#ff9eaa">● HeyGen — BLOCKED • Avatar IV monthly free limit reached</div>
-        <div style="color:#ffd37a">● OpenArt — BLOCKED • 40 credits available, cheapest video needs 50</div>
-        <div style="color:#ff9eaa">● Runway — BLOCKED • free workspace has no video models</div>
+        <div style="color:#80f3b7">① PixVerse — PRIORITY • best target for comedy/anime</div>
+        <div style="color:#ffd37a">○ PixVerse access — NOT CONNECTED in ChatGPT workspace</div>
+        <div style="color:#ff9eaa">② HeyGen — BLOCKED • Avatar IV monthly free limit reached</div>
+        <div style="color:#ffd37a">③ OpenArt — BLOCKED • 40 credits available, cheapest video needs 50</div>
+        <div style="color:#ff9eaa">④ Runway — BLOCKED • free workspace has no video models</div>
+        <div style="color:#85a4bb">⑤ Descript / Adobe Express — fallback candidates when connected</div>
       </div>
-      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #8f3d4b;border-radius:999px;color:#ffb4bd;background:#341820">BLOCKED</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • NO PAID FALLBACK</span></div>
-      <button id="alex-kai-board-run" style="margin-top:6px;width:100%;padding:5px 6px;border-radius:6px;border:1px solid #705229;background:#302715;color:#ffe0a0;font-size:8px;font-weight:800;cursor:pointer">Prepare Brief While Waiting</button>`;
+      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #705229;border-radius:999px;color:#ffe0a0;background:#302715">WAITING ACCESS</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • NO PAID FALLBACK</span></div>
+      <button id="alex-kai-board-run" style="margin-top:6px;width:100%;padding:5px 6px;border-radius:6px;border:1px solid #2b6f8d;background:#123e55;color:#d9f5ff;font-size:8px;font-weight:800;cursor:pointer">Prepare PixVerse Comedy Brief</button>`;
     Object.assign(card.style, {
       position: 'absolute', left: '26.2%', top: '8.2%', width: '19.5%', minHeight: '15%', zIndex: '9',
       padding: '8px', borderRadius: '8px', border: '1px solid #2a6a86',
@@ -92,10 +95,10 @@
     if (!(kaiPanel instanceof HTMLElement) || document.getElementById('kai-provider-status')) return;
     const box = document.createElement('div');
     box.id = 'kai-provider-status';
-    box.innerHTML = `<b style="color:#ff9eaa">VIDEO GENERATION BLOCKED</b><br><span>HeyGen free limit reached • OpenArt 40/50 credits • Runway free video unavailable</span><br><span style="color:#8ba6ba">Kai will not mark a video complete until a real MP4 exists.</span>`;
+    box.innerHTML = `<b style="color:#80f3b7">KAI FREE VIDEO ROUTER</b><br><span>Priority: PixVerse → HeyGen → OpenArt → Runway → Descript / Adobe Express</span><br><span style="color:#ffd37a">PixVerse is not currently connected, so Kai cannot call it automatically yet.</span><br><span style="color:#8ba6ba">Kai will only mark Complete after a real MP4 exists.</span>`;
     Object.assign(box.style, {
-      margin: '8px 0', padding: '8px', borderRadius: '8px', border: '1px solid #743d48',
-      background: '#2c1720', color: '#ffd2d7', fontSize: '9px', lineHeight: '1.45'
+      margin: '8px 0', padding: '8px', borderRadius: '8px', border: '1px solid #2f6d58',
+      background: '#102821', color: '#d2fff0', fontSize: '9px', lineHeight: '1.45'
     });
     const note = kaiPanel.querySelector('.kai-note');
     note?.insertAdjacentElement('afterend', box);
@@ -121,15 +124,15 @@
     prep = document.createElement('button');
     prep.id = 'alex-prepare-kai';
     prep.className = 'secondary';
-    prep.textContent = 'Alex Prepare Comedy Brief (Provider Blocked)';
-    prep.setAttribute('title', 'Alex can prepare the brief, but free video generation is currently blocked');
+    prep.textContent = 'Alex Prepare PixVerse Comedy Brief';
+    prep.setAttribute('title', 'Alex prepares a comedy brief for Kai with PixVerse as the first-choice free provider');
     assign.insertAdjacentElement('afterend', prep);
 
     prep.addEventListener('click', () => {
       const seed = input.value.trim() || 'a fresh funny IT office mishap selected by Alex';
       const brief = buildBrief(seed);
       setReactInput(input, brief);
-      showPrepToast('Alex prepared the Comedy Cartoon brief. Kai is waiting for a free video provider.');
+      showPrepToast('Alex prepared the Comedy Cartoon brief for Kai. PixVerse is first priority once access is connected.');
     });
   }
 
@@ -144,7 +147,7 @@
       const seed = name === 'IT Comedy' ? ideas[Math.floor(Math.random() * ideas.length)] : `${name} comedy cartoon concept`;
       setReactInput(input, buildBrief(seed));
     }
-    showPrepToast(`Alex prepared ${name} for Kai, but real video generation is blocked until a free provider becomes available.`);
+    showPrepToast(`Alex prepared ${name} for Kai. PixVerse is first priority, but automatic generation waits until provider access is connected.`);
   }, true);
 
   const observer = new MutationObserver(ensureButton);
