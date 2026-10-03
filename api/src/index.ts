@@ -16,7 +16,7 @@ const loginAttempts = new Map<string,{count:number,windowStart:number}>();
 const handshakes = new Map<string,{ecdh:ReturnType<typeof createECDH>,challenge:string,expiresAt:number}>();
 const securityLogs:any[] = [];
 const MAX_SECURITY_LOGS = 200;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const HANDSHAKE_TTL_MS = 2 * 60 * 1000;
 
@@ -56,6 +56,21 @@ function pruneHandshakes(){
   for(const [id,h] of handshakes) if(h.expiresAt<=now) handshakes.delete(id);
 }
 
+function attemptState(ip:string){
+  const now=Date.now();
+  let attempt=loginAttempts.get(ip);
+  if(!attempt || now-attempt.windowStart>=LOGIN_WINDOW_MS){
+    attempt={count:0,windowStart:now};
+    loginAttempts.set(ip,attempt);
+  }
+  return attempt;
+}
+
+function remainingLockSeconds(attempt:{count:number,windowStart:number}){
+  const remaining=Math.max(0,LOGIN_WINDOW_MS-(Date.now()-attempt.windowStart));
+  return Math.ceil(remaining/1000);
+}
+
 app.set('trust proxy',1);
 app.use(cors({
   origin(origin,cb){
@@ -70,6 +85,7 @@ app.get('/api/health', (_req,res)=>res.json({
   service:'ai-agents-office-api',
   authConfigured:Boolean(ADMIN_PASSWORD),
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
+  loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
   uptimeSec:Math.floor(process.uptime()),
   now:new Date().toISOString()
@@ -78,6 +94,15 @@ app.get('/api/health', (_req,res)=>res.json({
 app.post('/api/auth/handshake',(req,res)=>{
   if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
   pruneHandshakes();
+  const ip=req.ip || req.socket?.remoteAddress || 'unknown';
+  const attempt=attemptState(ip);
+  if(attempt.count>=MAX_LOGIN_ATTEMPTS){
+    const retryAfterSec=remainingLockSeconds(attempt);
+    res.setHeader('Retry-After',String(retryAfterSec));
+    addSecurityLog(req,'BLOCKED','unknown',`Too many login attempts; retry in ${retryAfterSec}s`);
+    return res.status(429).json({error:'Too many login attempts. Please wait before trying again.',retryAfterSec});
+  }
+
   const ecdh=createECDH('prime256v1');
   ecdh.generateKeys();
   const handshakeId=randomBytes(24).toString('hex');
@@ -100,11 +125,12 @@ app.post('/api/auth/login',(req,res)=>{
   if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
   const ip=req.ip || req.socket?.remoteAddress || 'unknown';
   const now=Date.now();
-  let attempt=loginAttempts.get(ip);
-  if(!attempt || now-attempt.windowStart>LOGIN_WINDOW_MS){attempt={count:0,windowStart:now};loginAttempts.set(ip,attempt);}
+  const attempt=attemptState(ip);
   if(attempt.count>=MAX_LOGIN_ATTEMPTS){
-    addSecurityLog(req,'BLOCKED','unknown','Too many login attempts');
-    return res.status(429).json({error:'Too many login attempts. Try again later.'});
+    const retryAfterSec=remainingLockSeconds(attempt);
+    res.setHeader('Retry-After',String(retryAfterSec));
+    addSecurityLog(req,'BLOCKED','unknown',`Too many login attempts; retry in ${retryAfterSec}s`);
+    return res.status(429).json({error:'Too many login attempts. Please wait before trying again.',retryAfterSec});
   }
 
   const handshakeId=String(req.body?.handshakeId||'');
@@ -117,7 +143,7 @@ app.post('/api/auth/login',(req,res)=>{
   if(!h || h.expiresAt<=now){
     attempt.count+=1;
     addSecurityLog(req,'FAILED','unknown','Expired or invalid key exchange');
-    return res.status(401).json({error:'Secure key exchange expired. Retry login.'});
+    return res.status(401).json({error:'Secure key exchange expired. Retry login.',attemptsRemaining:Math.max(0,MAX_LOGIN_ATTEMPTS-attempt.count)});
   }
 
   let username='unknown';
@@ -139,13 +165,15 @@ app.post('/api/auth/login',(req,res)=>{
     const okPass=secureEqual(password,ADMIN_PASSWORD);
     if(!okUser || !okPass){
       attempt.count += 1;
-      addSecurityLog(req,'FAILED',username||'unknown','Invalid username or password after encrypted key exchange');
-      return res.status(401).json({error:'Invalid username or password'});
+      const attemptsRemaining=Math.max(0,MAX_LOGIN_ATTEMPTS-attempt.count);
+      addSecurityLog(req,'FAILED',username||'unknown',`Invalid username or password after encrypted key exchange; ${attemptsRemaining} attempts remaining`);
+      return res.status(401).json({error:'Invalid username or password',attemptsRemaining});
     }
   }catch{
     attempt.count += 1;
+    const attemptsRemaining=Math.max(0,MAX_LOGIN_ATTEMPTS-attempt.count);
     addSecurityLog(req,'FAILED',username,'Encrypted login verification failed');
-    return res.status(401).json({error:'Secure login verification failed'});
+    return res.status(401).json({error:'Secure login verification failed',attemptsRemaining});
   }
 
   loginAttempts.delete(ip);
