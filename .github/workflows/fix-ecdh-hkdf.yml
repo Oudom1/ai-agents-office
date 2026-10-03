@@ -1,0 +1,36 @@
+name: Fix ECDH HKDF salt handling
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-ecdh-hkdf.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix base64 challenge handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('api/src/index.ts')
+          s=p.read_text()
+          old="Buffer.from(h.challenge),Buffer.from('ai-agents-office-auth-v1')"
+          new="Buffer.from(h.challenge,'base64'),Buffer.from('ai-agents-office-auth-v1')"
+          if old not in s:
+              raise SystemExit('HKDF anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/fix-ecdh-hkdf.yml
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/src/index.ts .github/workflows/fix-ecdh-hkdf.yml
+          git commit -m "Fix ECDH login HKDF challenge decoding"
+          git push
