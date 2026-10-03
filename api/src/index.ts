@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createECDH, hkdfSync, createDecipheriv } from 'node:crypto';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
 
 const app = express();
@@ -13,10 +13,12 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.i
 
 const sessions = new Map<string,{user:string,expiresAt:number}>();
 const loginAttempts = new Map<string,{count:number,windowStart:number}>();
+const handshakes = new Map<string,{ecdh:ReturnType<typeof createECDH>,challenge:string,expiresAt:number}>();
 const securityLogs:any[] = [];
 const MAX_SECURITY_LOGS = 200;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
+const HANDSHAKE_TTL_MS = 2 * 60 * 1000;
 
 function addSecurityLog(req:any,result:string,user:string,detail:string){
   securityLogs.unshift({
@@ -49,6 +51,11 @@ function requireAuth(req:any,res:any,next:any){
   next();
 }
 
+function pruneHandshakes(){
+  const now=Date.now();
+  for(const [id,h] of handshakes) if(h.expiresAt<=now) handshakes.delete(id);
+}
+
 app.set('trust proxy',1);
 app.use(cors({
   origin(origin,cb){
@@ -62,10 +69,32 @@ app.get('/api/health', (_req,res)=>res.json({
   ok:true,
   service:'ai-agents-office-api',
   authConfigured:Boolean(ADMIN_PASSWORD),
+  authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   startedAt,
   uptimeSec:Math.floor(process.uptime()),
   now:new Date().toISOString()
 }));
+
+app.post('/api/auth/handshake',(req,res)=>{
+  if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
+  pruneHandshakes();
+  const ecdh=createECDH('prime256v1');
+  ecdh.generateKeys();
+  const handshakeId=randomBytes(24).toString('hex');
+  const challenge=randomBytes(32).toString('base64');
+  const expiresAt=Date.now()+HANDSHAKE_TTL_MS;
+  handshakes.set(handshakeId,{ecdh,challenge,expiresAt});
+  res.json({
+    ok:true,
+    handshakeId,
+    challenge,
+    serverPublicKey:ecdh.getPublicKey().toString('base64'),
+    curve:'P-256',
+    kdf:'HKDF-SHA-256',
+    cipher:'AES-256-GCM',
+    expiresAt:new Date(expiresAt).toISOString()
+  });
+});
 
 app.post('/api/auth/login',(req,res)=>{
   if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
@@ -74,23 +103,56 @@ app.post('/api/auth/login',(req,res)=>{
   let attempt=loginAttempts.get(ip);
   if(!attempt || now-attempt.windowStart>LOGIN_WINDOW_MS){attempt={count:0,windowStart:now};loginAttempts.set(ip,attempt);}
   if(attempt.count>=MAX_LOGIN_ATTEMPTS){
-    addSecurityLog(req,'BLOCKED',String(req.body?.username||'unknown'),'Too many login attempts');
+    addSecurityLog(req,'BLOCKED','unknown','Too many login attempts');
     return res.status(429).json({error:'Too many login attempts. Try again later.'});
   }
-  const username=String(req.body?.username||'').trim();
-  const password=String(req.body?.password||'');
-  const okUser=secureEqual(username,ADMIN_USERNAME);
-  const okPass=secureEqual(password,ADMIN_PASSWORD);
-  if(!okUser || !okPass){
-    attempt.count += 1;
-    addSecurityLog(req,'FAILED',username||'unknown','Invalid username or password');
-    return res.status(401).json({error:'Invalid username or password'});
+
+  const handshakeId=String(req.body?.handshakeId||'');
+  const clientPublicKey=String(req.body?.clientPublicKey||'');
+  const ivB64=String(req.body?.iv||'');
+  const ciphertextB64=String(req.body?.ciphertext||'');
+  const tagB64=String(req.body?.tag||'');
+  const h=handshakes.get(handshakeId);
+  handshakes.delete(handshakeId);
+  if(!h || h.expiresAt<=now){
+    attempt.count+=1;
+    addSecurityLog(req,'FAILED','unknown','Expired or invalid key exchange');
+    return res.status(401).json({error:'Secure key exchange expired. Retry login.'});
   }
+
+  let username='unknown';
+  try{
+    const shared=h.ecdh.computeSecret(Buffer.from(clientPublicKey,'base64'));
+    const key=Buffer.from(hkdfSync('sha256',shared,Buffer.from(h.challenge),Buffer.from('ai-agents-office-auth-v1'),32));
+    const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(ivB64,'base64'));
+    decipher.setAAD(Buffer.from(handshakeId));
+    decipher.setAuthTag(Buffer.from(tagB64,'base64'));
+    const plaintext=Buffer.concat([decipher.update(Buffer.from(ciphertextB64,'base64')),decipher.final()]).toString('utf8');
+    const payload=JSON.parse(plaintext);
+    username=String(payload.username||'').trim();
+    const password=String(payload.password||'');
+    const challenge=String(payload.challenge||'');
+    const issuedAt=Number(payload.issuedAt||0);
+    if(challenge!==h.challenge || Math.abs(Date.now()-issuedAt)>HANDSHAKE_TTL_MS) throw new Error('challenge verification failed');
+
+    const okUser=secureEqual(username,ADMIN_USERNAME);
+    const okPass=secureEqual(password,ADMIN_PASSWORD);
+    if(!okUser || !okPass){
+      attempt.count += 1;
+      addSecurityLog(req,'FAILED',username||'unknown','Invalid username or password after encrypted key exchange');
+      return res.status(401).json({error:'Invalid username or password'});
+    }
+  }catch{
+    attempt.count += 1;
+    addSecurityLog(req,'FAILED',username,'Encrypted login verification failed');
+    return res.status(401).json({error:'Secure login verification failed'});
+  }
+
   loginAttempts.delete(ip);
   const token=randomBytes(32).toString('hex');
   const expiresAt=Date.now()+SESSION_TTL_HOURS*60*60*1000;
   sessions.set(token,{user:ADMIN_USERNAME,expiresAt});
-  addSecurityLog(req,'SUCCESS',ADMIN_USERNAME,'Login accepted');
+  addSecurityLog(req,'SUCCESS',ADMIN_USERNAME,'Login accepted via ECDH key exchange + AES-GCM verification');
   res.json({ok:true,token,user:ADMIN_USERNAME,expiresAt:new Date(expiresAt).toISOString()});
 });
 
