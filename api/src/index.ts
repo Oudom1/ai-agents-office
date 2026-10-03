@@ -2,17 +2,20 @@ import express from 'express';
 import cors from 'cors';
 import { randomBytes, timingSafeEqual, createECDH, hkdfSync, createDecipheriv } from 'node:crypto';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
+import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, persistSecurityLog } from './auth-store.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
   .split(',').map(v=>v.trim()).filter(Boolean);
 
 const sessions = new Map<string,{user:string,expiresAt:number}>();
 const loginAttempts = new Map<string,{count:number,windowStart:number}>();
+const resetAttempts = new Map<string,{count:number,windowStart:number}>();
 const handshakes = new Map<string,{ecdh:ReturnType<typeof createECDH>,challenge:string,expiresAt:number}>();
 const securityLogs:any[] = [];
 const MAX_SECURITY_LOGS = 200;
@@ -27,6 +30,7 @@ function addSecurityLog(req:any,result:string,user:string,detail:string){
     userAgent:req.get?.('user-agent') || 'unknown'
   });
   securityLogs.splice(MAX_SECURITY_LOGS);
+  void persistSecurityLog({result,username:user,detail,ip:req.ip || req.socket?.remoteAddress || 'unknown',userAgent:req.get?.('user-agent') || 'unknown'});
 }
 
 function secureEqual(a:string,b:string){
@@ -83,7 +87,9 @@ app.use(express.json({limit:'100kb'}));
 app.get('/api/health', (_req,res)=>res.json({
   ok:true,
   service:'ai-agents-office-api',
-  authConfigured:Boolean(ADMIN_PASSWORD),
+  authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
+  databaseConfigured:databaseConfigured(),
+  passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
@@ -92,7 +98,7 @@ app.get('/api/health', (_req,res)=>res.json({
 }));
 
 app.post('/api/auth/handshake',(req,res)=>{
-  if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
+  if(!ADMIN_PASSWORD && !databaseConfigured()) return res.status(503).json({error:'Security backend is not configured'});
   pruneHandshakes();
   const ip=req.ip || req.socket?.remoteAddress || 'unknown';
   const attempt=attemptState(ip);
@@ -122,7 +128,7 @@ app.post('/api/auth/handshake',(req,res)=>{
 });
 
 app.post('/api/auth/login',(req,res)=>{
-  if(!ADMIN_PASSWORD) return res.status(503).json({error:'Security backend is not configured'});
+  if(!ADMIN_PASSWORD && !databaseConfigured()) return res.status(503).json({error:'Security backend is not configured'});
   const ip=req.ip || req.socket?.remoteAddress || 'unknown';
   const now=Date.now();
   const attempt=attemptState(ip);
@@ -162,7 +168,7 @@ app.post('/api/auth/login',(req,res)=>{
     if(challenge!==h.challenge || Math.abs(Date.now()-issuedAt)>HANDSHAKE_TTL_MS) throw new Error('challenge verification failed');
 
     const okUser=secureEqual(username,ADMIN_USERNAME);
-    const okPass=secureEqual(password,ADMIN_PASSWORD);
+    const okPass=await verifyAdminPassword(username,password,ADMIN_USERNAME,ADMIN_PASSWORD);
     if(!okUser || !okPass){
       attempt.count += 1;
       const attemptsRemaining=Math.max(0,MAX_LOGIN_ATTEMPTS-attempt.count);
@@ -182,6 +188,43 @@ app.post('/api/auth/login',(req,res)=>{
   sessions.set(token,{user:ADMIN_USERNAME,expiresAt});
   addSecurityLog(req,'SUCCESS',ADMIN_USERNAME,'Login accepted via ECDH key exchange + AES-GCM verification');
   res.json({ok:true,token,user:ADMIN_USERNAME,expiresAt:new Date(expiresAt).toISOString()});
+});
+
+app.post('/api/auth/reset-password',async(req,res)=>{
+  if(!PASSWORD_RESET_KEY || !databaseConfigured()) return res.status(503).json({error:'Password reset service is not configured'});
+  const ip=req.ip || req.socket?.remoteAddress || 'unknown';
+  const now=Date.now();
+  const RESET_WINDOW_MS=15*60*1000;
+  const MAX_RESET_ATTEMPTS=3;
+  let attempt=resetAttempts.get(ip);
+  if(!attempt || now-attempt.windowStart>=RESET_WINDOW_MS){attempt={count:0,windowStart:now};resetAttempts.set(ip,attempt);}
+  if(attempt.count>=MAX_RESET_ATTEMPTS){
+    const retryAfterSec=Math.ceil(Math.max(0,RESET_WINDOW_MS-(now-attempt.windowStart))/1000);
+    res.setHeader('Retry-After',String(retryAfterSec));
+    addSecurityLog(req,'BLOCKED','unknown','Too many password reset attempts');
+    return res.status(429).json({error:'Too many reset attempts. Please wait before trying again.',retryAfterSec});
+  }
+  const username=String(req.body?.username||'').trim();
+  const recoveryKey=String(req.body?.recoveryKey||'');
+  const newPassword=String(req.body?.newPassword||'');
+  if(!strongPassword(newPassword)) return res.status(400).json({error:'Password must be 15+ characters with uppercase, lowercase, number and special character.'});
+  if(!secureEqual(username,ADMIN_USERNAME) || !secureEqual(recoveryKey,PASSWORD_RESET_KEY)){
+    attempt.count+=1;
+    addSecurityLog(req,'FAILED',username||'unknown','Invalid password recovery credentials');
+    return res.status(401).json({error:'Invalid recovery credentials',attemptsRemaining:Math.max(0,MAX_RESET_ATTEMPTS-attempt.count)});
+  }
+  try{
+    await resetAdminPassword(username,newPassword);
+    sessions.clear();
+    loginAttempts.clear();
+    resetAttempts.delete(ip);
+    addSecurityLog(req,'SUCCESS',username,'Admin password reset in Neon; active sessions revoked');
+    return res.json({ok:true,message:'Password reset successful. Sign in with the new password.'});
+  }catch(e){
+    console.error('Password reset failed',e);
+    addSecurityLog(req,'FAILED',username,'Password reset database error');
+    return res.status(500).json({error:'Unable to update password'});
+  }
 });
 
 app.get('/api/auth/status',requireAuth,(req:any,res)=>res.json({ok:true,user:req.auth.user,expiresAt:new Date(req.auth.expiresAt).toISOString()}));
