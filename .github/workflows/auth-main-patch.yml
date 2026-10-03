@@ -19,14 +19,14 @@ jobs:
           from pathlib import Path
           p=Path('frontend/src/main.tsx')
           s=p.read_text()
-          old="const API = (import.meta.env.VITE_API_URL || '').replace(/\\\/$/, '') + '/api';"
-          new="""const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\\\/$/, '');
+          old=r"const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';"
+          new="""const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
           const API = API_BASE + '/api';
           const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
           function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
             const headers = new Headers(init.headers || {});
             const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-            if (token) headers.set('Authorization', `Bearer ${token}`);
+            if (token) headers.set('Authorization', 'Bearer ' + token);
             return fetch(input, {...init, headers});
           }"""
           if old not in s:
