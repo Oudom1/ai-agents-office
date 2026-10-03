@@ -1,5 +1,6 @@
 name: Update Kai free video router
 
+# Keeps Kai on free-only provider routing and prevents paid fallback.
 on:
   workflow_dispatch:
   push:
