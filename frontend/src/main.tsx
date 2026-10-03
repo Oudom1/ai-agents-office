@@ -16,6 +16,13 @@ const fallbackAgents:Agent[]=[
 {id:'implement',name:'Kai',role:'Senior Implement',state:'working',position:{x:58,y:59},home:{x:58,y:59}}
 ];
 
+const kaiVideoTemplates=[
+ {name:'Funny Cartoon',prompt:'Create a 10-second funny cartoon video. A cute office worker spills coffee on the desk, looks shocked, then pretends nothing happened while coworkers stare. Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous tone, smooth animation, vertical 9:16.'},
+ {name:'IT Comedy',prompt:'Create a 10-second funny cartoon video of an IT administrator confidently fixing a computer, accidentally unplugging the wrong cable, then freezing while every monitor goes dark. Bright 2D cartoon style, exaggerated reaction, playful comedy, vertical 9:16.'},
+ {name:'Security Joke',prompt:'Create a 10-second funny cartoon video of a cybersecurity analyst celebrating that the system is secure, then 99 warning alerts suddenly appear on the monitor. Funny timing, exaggerated facial expression, colorful cartoon office, vertical 9:16.'},
+ {name:'Short Promo',prompt:'Create a 10-second vertical animated promo video with energetic motion, clean modern graphics, short punchy scenes, upbeat mood, and a strong final hero shot. Format 9:16 for Shorts and Reels.'}
+];
+
 function App(){
  const [agents,setAgents]=useState<Agent[]>(fallbackAgents); const [tasks,setTasks]=useState<Task[]>([]); const [selected,setSelected]=useState('sysadmin'); const [taskTitle,setTaskTitle]=useState('');
  const refresh=async()=>{try{const [a,t]=await Promise.all([fetch(`${API}/agents`),fetch(`${API}/tasks`)]); if(a.ok)setAgents(await a.json()); if(t.ok)setTasks(await t.json());}catch{}};
@@ -45,7 +52,8 @@ function App(){
    </section>
    <aside>
     <div className="panel"><h2>Manager Control</h2><label>Agent</label><select value={selected} onChange={e=>setSelected(e.target.value)}>{workerAgents.map(a=><option key={a.id} value={a.id}>{a.role}</option>)}</select><button onClick={call}>Call to Manager</button><div className="row"><button className="secondary" onClick={()=>state('working')}>Work</button><button className="secondary" onClick={()=>state('break')}>Break</button><button className="secondary" onClick={()=>state('lunch')}>Lunch</button></div><input placeholder="Assign a task..." value={taskTitle} onChange={e=>setTaskTitle(e.target.value)}/><button onClick={assign}>Assign Task</button></div>
-    <div className="panel"><h2>Agent Status</h2>{workerAgents.map(a=><div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><MiniProgress completed={completedByAgent[a.id]??0}/></div><em className={`badge ${a.state}`}>{a.state}</em></div>)}</div>
+    {selected==='implement'&&<div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-FIRST</span></div><p className="kai-note">Create the prompt first, then route generation to an available video provider. Finished videos can be stored in Google Drive.</p><div className="skill-tags"><span>Runway</span><span>OpenArt</span><span>HeyGen</span><span>Adobe</span><span>Google Drive</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t=><button key={t.name} className="template-btn" onClick={()=>setTaskTitle(t.prompt)}>{t.name}</button>)}</div></div>}
+    <div className="panel"><h2>Agent Status</h2>{workerAgents.map(a=><div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span>{a.id==='implement'&&<span className="kai-skill-line">Video AI • Adobe • Drive</span>}<MiniProgress completed={completedByAgent[a.id]??0}/></div><em className={`badge ${a.state}`}>{a.state}</em></div>)}</div>
     <div className="panel"><h2>Active Tasks</h2>{tasks.filter(t=>t.status!=='done').length===0?<p className="muted">No active tasks</p>:tasks.filter(t=>t.status!=='done').map(t=><div className="task" key={t.id}><b>{t.title}</b><span>{agents.find(a=>a.id===t.agentId)?.name}</span></div>)}</div>
    </aside>
   </main>
