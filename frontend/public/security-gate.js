@@ -22,6 +22,10 @@
     localStorage.setItem(LOG_KEY,JSON.stringify(logs.slice(0,MAX_LOGS)));
   }
 
+  function getConfiguredUser(){
+    try{return JSON.parse(localStorage.getItem(CFG_KEY)||'null')?.user||'Admin'}catch{return 'Admin'}
+  }
+
   function style(el,props){Object.assign(el.style,props)}
 
   function showLogs(){
@@ -41,22 +45,37 @@
 
   function escapeHtml(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
 
-  function addSecurityButton(){
-    if(document.getElementById('ai-security-button'))return;
-    const b=document.createElement('button');b.id='ai-security-button';b.textContent='🔒 Security Logs';
-    style(b,{position:'fixed',left:'14px',bottom:'14px',zIndex:'99990',border:'1px solid #2d5c73',background:'#0b2232',color:'#d9f3ff',borderRadius:'999px',padding:'8px 11px',font:'800 9px Inter,Segoe UI,Arial,sans-serif',cursor:'pointer',boxShadow:'0 10px 26px rgba(0,0,0,.35)'});
-    b.onclick=showLogs;document.body.appendChild(b);
+  function logout(){
+    const user=getConfiguredUser();
+    addLog('SUCCESS',user,'User logged out');
+    sessionStorage.removeItem(SESSION_KEY);
+    document.getElementById('ai-security-button')?.remove();
+    document.getElementById('ai-logout-button')?.remove();
+    location.reload();
+  }
+
+  function addSecurityButtons(){
+    if(!document.getElementById('ai-security-button')){
+      const b=document.createElement('button');b.id='ai-security-button';b.textContent='🔒 Security Logs';
+      style(b,{position:'fixed',left:'14px',bottom:'14px',zIndex:'99990',border:'1px solid #2d5c73',background:'#0b2232',color:'#d9f3ff',borderRadius:'999px',padding:'8px 11px',font:'800 9px Inter,Segoe UI,Arial,sans-serif',cursor:'pointer',boxShadow:'0 10px 26px rgba(0,0,0,.35)'});
+      b.onclick=showLogs;document.body.appendChild(b);
+    }
+    if(!document.getElementById('ai-logout-button')){
+      const b=document.createElement('button');b.id='ai-logout-button';b.textContent='↪ Log Out';
+      style(b,{position:'fixed',left:'126px',bottom:'14px',zIndex:'99990',border:'1px solid #7c3f49',background:'#2c1720',color:'#ffc1c8',borderRadius:'999px',padding:'8px 11px',font:'800 9px Inter,Segoe UI,Arial,sans-serif',cursor:'pointer',boxShadow:'0 10px 26px rgba(0,0,0,.35)'});
+      b.onclick=logout;document.body.appendChild(b);
+    }
   }
 
   function lockPage(){document.documentElement.style.overflow='hidden'}
-  function unlockPage(){document.documentElement.style.overflow='';sessionStorage.setItem(SESSION_KEY,'ok');addSecurityButton()}
+  function unlockPage(){document.documentElement.style.overflow='';sessionStorage.setItem(SESSION_KEY,'ok');addSecurityButtons()}
 
   function strongPassword(password){
     return password.length>=15 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
   }
 
   function gate(){
-    if(sessionStorage.getItem(SESSION_KEY)==='ok'){addSecurityButton();return}
+    if(sessionStorage.getItem(SESSION_KEY)==='ok'){addSecurityButtons();return}
     lockPage();
     const existing=document.getElementById('ai-security-gate');if(existing)return;
     const overlay=document.createElement('div');overlay.id='ai-security-gate';
