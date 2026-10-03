@@ -155,7 +155,7 @@ app.post('/api/auth/login',async(req,res)=>{
   let username='unknown';
   try{
     const shared=h.ecdh.computeSecret(Buffer.from(clientPublicKey,'base64'));
-    const key=Buffer.from(hkdfSync('sha256',shared,Buffer.from(h.challenge),Buffer.from('ai-agents-office-auth-v1'),32));
+    const key=Buffer.from(hkdfSync('sha256',shared,Buffer.from(h.challenge,'base64'),Buffer.from('ai-agents-office-auth-v1'),32));
     const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(ivB64,'base64'));
     decipher.setAAD(Buffer.from(handshakeId));
     decipher.setAuthTag(Buffer.from(tagB64,'base64'));
