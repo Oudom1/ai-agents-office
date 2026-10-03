@@ -1,5 +1,6 @@
 (() => {
   const PREPARED = 'data-alex-prepared';
+  const TASK_STORAGE_KEY = 'ai-agents-office-tasks-v3';
 
   const ideas = [
     'an IT administrator fixing one issue and accidentally creating three new alerts',
@@ -19,7 +20,7 @@
 
   function buildBrief(seed) {
     const clean = (seed || ideas[Math.floor(Math.random() * ideas.length)]).trim().slice(0, 82);
-    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. FREE ONLY; try PixVerse first; no paid fallback; upload real final MP4 to Drive.`.slice(0, 240);
+    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. FREE ONLY; no paid fallback; upload real final MP4 to Drive.`.slice(0, 240);
   }
 
   function showPrepToast(message) {
@@ -57,8 +58,18 @@
       if (!(input instanceof HTMLInputElement)) return;
       const brief = buildBrief('a fresh funny IT office mishap selected by Alex');
       setReactInput(input, brief);
-      showPrepToast('Alex prepared Kai’s Comedy Cartoon brief. PixVerse is the first-choice provider, but it is not connected to this workspace yet.');
+      showPrepToast('Alex prepared Kai’s Comedy Cartoon brief, but generation is BLOCKED: no free video provider is currently available.');
     }, 150);
+  }
+
+  function clearPreviousTasks() {
+    try {
+      localStorage.removeItem(TASK_STORAGE_KEY);
+      showPrepToast('Previous dashboard tasks cleared. Reloading clean task list…');
+      setTimeout(() => window.location.reload(), 450);
+    } catch {
+      showPrepToast('Could not clear previous tasks from browser storage.');
+    }
   }
 
   function ensureTaskBoardCard() {
@@ -71,14 +82,13 @@
       <div style="font-size:8px;font-weight:900;letter-spacing:.8px;color:#75e9ff">ALEX → KAI • FREE VIDEO ROUTER</div>
       <div style="font-size:11px;font-weight:900;color:#fff;margin:4px 0 4px">Comedy Cartoon</div>
       <div style="display:grid;gap:3px;font-size:7px;line-height:1.35">
-        <div style="color:#80f3b7">① PixVerse — PRIORITY • best target for comedy/anime</div>
-        <div style="color:#ffd37a">○ PixVerse access — NOT CONNECTED in ChatGPT workspace</div>
-        <div style="color:#ff9eaa">② HeyGen — BLOCKED • Avatar IV monthly free limit reached</div>
-        <div style="color:#ffd37a">③ OpenArt — BLOCKED • 40 credits available, cheapest video needs 50</div>
-        <div style="color:#ff9eaa">④ Runway — BLOCKED • free workspace has no video models</div>
-        <div style="color:#85a4bb">⑤ Descript / Adobe Express — fallback candidates when connected</div>
+        <div style="color:#ffd37a">● PixVerse — PRIORITY • connect/API required for automatic generation</div>
+        <div style="color:#ff9eaa">● HeyGen — BLOCKED • Avatar IV monthly free limit reached</div>
+        <div style="color:#ffd37a">● OpenArt — BLOCKED • 40 credits available, cheapest video needs 50</div>
+        <div style="color:#ff9eaa">● Runway — BLOCKED • free workspace has no video models</div>
+        <div style="color:#8fdcff">● Descript / Adobe Express — fallback candidates when connected</div>
       </div>
-      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #705229;border-radius:999px;color:#ffe0a0;background:#302715">WAITING ACCESS</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • NO PAID FALLBACK</span></div>
+      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #8f3d4b;border-radius:999px;color:#ffb4bd;background:#341820">WAITING</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • NO PAID FALLBACK</span></div>
       <button id="alex-kai-board-run" style="margin-top:6px;width:100%;padding:5px 6px;border-radius:6px;border:1px solid #2b6f8d;background:#123e55;color:#d9f5ff;font-size:8px;font-weight:800;cursor:pointer">Prepare PixVerse Comedy Brief</button>`;
     Object.assign(card.style, {
       position: 'absolute', left: '26.2%', top: '8.2%', width: '19.5%', minHeight: '15%', zIndex: '9',
@@ -95,18 +105,40 @@
     if (!(kaiPanel instanceof HTMLElement) || document.getElementById('kai-provider-status')) return;
     const box = document.createElement('div');
     box.id = 'kai-provider-status';
-    box.innerHTML = `<b style="color:#80f3b7">KAI FREE VIDEO ROUTER</b><br><span>Priority: PixVerse → HeyGen → OpenArt → Runway → Descript / Adobe Express</span><br><span style="color:#ffd37a">PixVerse is not currently connected, so Kai cannot call it automatically yet.</span><br><span style="color:#8ba6ba">Kai will only mark Complete after a real MP4 exists.</span>`;
+    box.innerHTML = `<b style="color:#8fdcff">FREE VIDEO ROUTER</b><br><span>PixVerse first → HeyGen → OpenArt → Runway → Descript / Adobe Express</span><br><span style="color:#ffb4bd">Current connected providers cannot produce a free MP4 right now.</span><br><span style="color:#8ba6ba">Kai will not mark a video complete until a real MP4 exists.</span>`;
     Object.assign(box.style, {
-      margin: '8px 0', padding: '8px', borderRadius: '8px', border: '1px solid #2f6d58',
-      background: '#102821', color: '#d2fff0', fontSize: '9px', lineHeight: '1.45'
+      margin: '8px 0', padding: '8px', borderRadius: '8px', border: '1px solid #365f73',
+      background: '#102532', color: '#d5edf8', fontSize: '9px', lineHeight: '1.45'
     });
     const note = kaiPanel.querySelector('.kai-note');
     note?.insertAdjacentElement('afterend', box);
   }
 
+  function ensureClearTaskButton() {
+    const manager = document.querySelector('.manager-control');
+    if (!(manager instanceof HTMLElement) || document.getElementById('clear-previous-tasks')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'clear-previous-tasks';
+    btn.className = 'secondary';
+    btn.textContent = 'Clear Previous Tasks';
+    btn.setAttribute('title', 'Clear previous dashboard tasks and blockers stored in this browser');
+    Object.assign(btn.style, {
+      borderColor: '#7c3f49',
+      color: '#ffc1c8',
+      background: '#2c1720'
+    });
+    btn.addEventListener('click', clearPreviousTasks);
+
+    const autoAssign = [...manager.querySelectorAll('button')].find(b => /Alex Auto-Assign by Skill/i.test(b.textContent || ''));
+    if (autoAssign) autoAssign.insertAdjacentElement('afterend', btn);
+    else manager.appendChild(btn);
+  }
+
   function ensureButton() {
     ensureTaskBoardCard();
     ensureProviderBanner();
+    ensureClearTaskButton();
     const control = document.querySelector('.manager-control');
     const assign = control?.querySelector('.assign-btn');
     const input = control?.querySelector('.task-compose input');
@@ -125,14 +157,14 @@
     prep.id = 'alex-prepare-kai';
     prep.className = 'secondary';
     prep.textContent = 'Alex Prepare PixVerse Comedy Brief';
-    prep.setAttribute('title', 'Alex prepares a comedy brief for Kai with PixVerse as the first-choice free provider');
+    prep.setAttribute('title', 'Alex prepares a comedy-cartoon prompt optimized for PixVerse first; FREE ONLY routing remains enforced');
     assign.insertAdjacentElement('afterend', prep);
 
     prep.addEventListener('click', () => {
       const seed = input.value.trim() || 'a fresh funny IT office mishap selected by Alex';
-      const brief = buildBrief(seed);
+      const brief = buildBrief(seed).replace('Bright colorful 2D cartoon', 'PixVerse priority: bright colorful 2D/3D anime-comedy cartoon');
       setReactInput(input, brief);
-      showPrepToast('Alex prepared the Comedy Cartoon brief for Kai. PixVerse is first priority once access is connected.');
+      showPrepToast('Alex prepared the PixVerse-first Comedy Cartoon brief. Kai will use only a genuinely free route.');
     });
   }
 
@@ -145,9 +177,10 @@
     const input = document.querySelector('.manager-control .task-compose input');
     if (input instanceof HTMLInputElement) {
       const seed = name === 'IT Comedy' ? ideas[Math.floor(Math.random() * ideas.length)] : `${name} comedy cartoon concept`;
-      setReactInput(input, buildBrief(seed));
+      const brief = buildBrief(seed).replace('Bright colorful 2D cartoon', 'PixVerse priority: bright colorful 2D/3D anime-comedy cartoon');
+      setReactInput(input, brief);
     }
-    showPrepToast(`Alex prepared ${name} for Kai. PixVerse is first priority, but automatic generation waits until provider access is connected.`);
+    showPrepToast(`Alex prepared ${name} for Kai with PixVerse as first priority. Automatic PixVerse generation still requires a connected PixVerse API/plugin.`);
   }, true);
 
   const observer = new MutationObserver(ensureButton);
