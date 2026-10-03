@@ -72,6 +72,24 @@
     }
   }
 
+  function clearSelectedAgentTasks() {
+    const select = document.querySelector('.manager-control select');
+    if (!(select instanceof HTMLSelectElement)) return;
+    const agentId = select.value;
+    const agentName = select.selectedOptions[0]?.textContent?.trim() || 'selected user';
+    try {
+      const current = JSON.parse(localStorage.getItem(TASK_STORAGE_KEY) || '[]');
+      const tasks = Array.isArray(current) ? current : [];
+      const remaining = tasks.filter(task => task?.agentId !== agentId);
+      const removed = tasks.length - remaining.length;
+      localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(remaining));
+      showPrepToast(`${removed} task${removed === 1 ? '' : 's'} cleared for ${agentName}.`);
+      setTimeout(() => window.location.reload(), 450);
+    } catch {
+      showPrepToast(`Could not clear tasks for ${agentName}.`);
+    }
+  }
+
   function ensureTaskBoardCard() {
     const office = document.querySelector('.office');
     if (!(office instanceof HTMLElement) || document.getElementById('alex-kai-board-card')) return;
@@ -135,10 +153,37 @@
     else manager.appendChild(btn);
   }
 
+  function ensureTaskCleanupCard() {
+    const results = document.querySelector('.results-panel');
+    const select = document.querySelector('.manager-control select');
+    if (!(results instanceof HTMLElement) || !(select instanceof HTMLSelectElement)) return;
+
+    const agentName = select.selectedOptions[0]?.textContent?.trim() || 'Selected Agent';
+    let card = document.getElementById('task-cleanup-card');
+    if (card) {
+      const label = card.querySelector('#task-cleanup-user');
+      if (label) label.textContent = agentName;
+      return;
+    }
+
+    card = document.createElement('div');
+    card.id = 'task-cleanup-card';
+    card.className = 'panel';
+    card.innerHTML = `
+      <div class="panel-title"><h2>Task Cleanup</h2><span>USER TASKS</span></div>
+      <p class="muted" style="margin:6px 0 10px">Clear tasks only for: <b id="task-cleanup-user" style="color:#dcecff"></b></p>
+      <button id="clear-selected-user-tasks" style="width:100%;background:#5a2832;border-color:#8f3d4b;color:#ffd7dc">Clear User Tasks</button>`;
+    results.insertAdjacentElement('afterend', card);
+    const label = card.querySelector('#task-cleanup-user');
+    if (label) label.textContent = agentName;
+    card.querySelector('#clear-selected-user-tasks')?.addEventListener('click', clearSelectedAgentTasks);
+  }
+
   function ensureButton() {
     ensureTaskBoardCard();
     ensureProviderBanner();
     ensureClearTaskButton();
+    ensureTaskCleanupCard();
     const control = document.querySelector('.manager-control');
     const assign = control?.querySelector('.assign-btn');
     const input = control?.querySelector('.task-compose input');
