@@ -42,8 +42,8 @@ const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
 const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
 const WORK_START_HOUR = 8;
 const WORK_END_HOUR = 18;
-const KAI_FREE_VIDEO_AVAILABLE = false;
-const KAI_PROVIDER_BLOCKER = 'HeyGen Free blocked: Avatar IV monthly limit reached. FREE ONLY is enabled, so no paid fallback will be used.';
+const KAI_FREE_VIDEO_AVAILABLE = true;
+const KAI_PROVIDER_BLOCKER = 'PixVerse Free is selected. FREE ONLY is enabled; no paid fallback will be used.';
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 13, y: 18}, home: {x: 13, y: 18}},
@@ -61,7 +61,7 @@ const agentSkills: Record<string, string[]> = {
   security: ['Security', 'IAM', 'Access Review', 'Graylog', 'Compliance'],
   cloud: ['Cloud', 'Azure', 'Infrastructure', 'Networking', 'Deployment'],
   qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review'],
-  implement: ['Implementation', 'Video', 'Comedy Cartoon', 'HeyGen', 'Google Drive', 'Automation'],
+  implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Google Drive', 'Automation'],
   developer: ['React', 'TypeScript', 'Python', 'Java', 'GitHub', 'Portfolio']
 };
 
@@ -101,14 +101,16 @@ function makeItComedyPrompt() {
 }
 
 function loadLocalTasks(): Task[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-  catch { return []; }
+  try {
+    const parsed: Task[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return parsed.map(t => t.agentId === 'implement' ? {...t, provider: 'PixVerse Free', blocker: undefined, durationSec: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t);
+  } catch { return []; }
 }
 
 function bestAgentForTask(title: string) {
   const q = title.toLowerCase();
   if (/portfolio|react|typescript|python|java|code|developer|github|website|web/.test(q)) return 'developer';
-  if (/video|cartoon|comedy|heygen|reel|short|promo/.test(q)) return 'implement';
+  if (/video|cartoon|comedy|heygen|pixverse|reel|short|promo/.test(q)) return 'implement';
   if (/security|iam|access|graylog|audit|compliance|vulnerability/.test(q)) return 'security';
   if (/cloud|azure|network|infrastructure|deploy|server/.test(q)) return 'cloud';
   if (/test|uat|qa|quality|validate|verification/.test(q)) return 'qa';
@@ -248,9 +250,9 @@ function App() {
     const id = crypto.randomUUID();
     const task: Task = {
       id, agentId, title, status: 'active', phase: kaiBlocked ? 'free-check' : 'queued', createdAt: new Date().toISOString(),
-      provider: isKai ? 'HeyGen Free' : isLeo ? 'Developer Workspace' : 'Internal Demo',
+      provider: isKai ? 'PixVerse Free' : isLeo ? 'Developer Workspace' : 'Internal Demo',
       freeOnly: isKai,
-      durationSec: kaiBlocked ? undefined : isKai ? 24 : isLeo ? 45 : 12,
+      durationSec: isKai ? undefined : isLeo ? 45 : 12,
       recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined,
       blocker: kaiBlocked ? KAI_PROVIDER_BLOCKER : undefined
     };
@@ -372,7 +374,7 @@ function App() {
     const id = crypto.randomUUID();
     const nextTask: Task = {
       id, agentId: 'implement', title: dueRecurring.title, status: 'active', phase: 'queued', createdAt: new Date().toISOString(),
-      provider: dueRecurring.provider ?? 'HeyGen Free', freeOnly: true, durationSec: dueRecurring.durationSec ?? 24,
+      provider: dueRecurring.provider ?? 'PixVerse Free', freeOnly: true, durationSec: dueRecurring.durationSec ?? 24,
       recurringEveryHours: KAI_REFRESH_HOURS, sourceTaskId: dueRecurring.id
     };
     setTasks(prev => prev.map(t => t.id === dueRecurring.id ? {...t, nextRunAt: undefined} : t));
