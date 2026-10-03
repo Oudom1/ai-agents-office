@@ -1,4 +1,4 @@
-name: Fix Kai ready state
+name: Update Kai free video router
 
 on:
   workflow_dispatch:
@@ -16,39 +16,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Patch Kai state and labels
+      - name: Update Kai free provider routing
         run: |
           python - <<'PY'
           from pathlib import Path
-          p=Path('frontend/src/main.tsx')
-          s=p.read_text()
-          reps={
-          "const KAI_PROVIDER_BLOCKER = 'PixVerse Free is selected. FREE ONLY is enabled; no paid fallback will be used.';":"const KAI_PROVIDER_PENDING = 'Waiting for real free video provider integration. FREE ONLY is enabled; no paid fallback will be used.';",
-          "if (Array.isArray(data) && data.length) setTasks(data);":"if (Array.isArray(data) && data.length) setTasks(data.map((t: Task) => t.agentId === 'implement' ? {...t, provider: 'PixVerse Free', blocker: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t));",
-          "        blocker: KAI_PROVIDER_BLOCKER\n":"        blocker: undefined\n",
-          "      patchTask(taskId, {phase: 'free-check', blocker: KAI_PROVIDER_BLOCKER, startedAt: undefined});":"      patchTask(taskId, {phase: 'queued', blocker: undefined, startedAt: undefined});",
-          "      setNotice('Kai blocked — HeyGen Free Avatar IV monthly limit reached');":"      setNotice('Kai is ready. Real free video provider integration is still pending.');",
-          "      : 'Alex prepared the brief, but Kai is blocked by the HeyGen Free monthly limit');":"      : 'Alex prepared the brief. Kai is waiting for a real free provider integration.');",
-          "      patchTask(task.id, {status: 'active', phase: 'free-check', blocker: KAI_PROVIDER_BLOCKER, completedAt: undefined, resultMessage: undefined, nextRunAt: undefined});\n      updateLocal('implement', {state: 'blocked', currentTask: task.title, destination: {x: 85, y: 18}});\n      setNotice('Kai cannot complete — no real MP4 exists because HeyGen Free quota is blocked');":"      patchTask(task.id, {status: 'active', phase: 'queued', blocker: undefined, completedAt: undefined, resultMessage: KAI_PROVIDER_PENDING, nextRunAt: undefined});\n      updateLocal('implement', {state: 'working', currentTask: task.title});\n      setNotice('Kai task is waiting for real free video provider integration — no fake completion.');",
-          "      patchTask(task.id, {blocker: KAI_PROVIDER_BLOCKER, phase: 'free-check'});\n      updateLocal(task.agentId, {state: 'blocked'});\n      setNotice('Kai blocker cannot be cleared until HeyGen Free quota becomes available');":"      patchTask(task.id, {blocker: undefined, phase: 'queued'});\n      updateLocal(task.agentId, {state: 'working'});\n      setNotice('Kai is ready; provider integration is pending, not quota-blocked.');",
-          "<p className=\"kai-note\">Alex prepares comedy-cartoon video briefs for Kai. Current real provider state: HeyGen Free Avatar IV monthly limit reached, so Kai stays BLOCKED and no task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>Comedy Cartoon</span><span>HeyGen Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Quota Blocked</span></div>":"<p className=\"kai-note\">Alex prepares comedy-cartoon video briefs for Kai. PixVerse Free is the selected UI route, but no real provider API is connected yet. Kai remains READY and tasks wait for provider integration. No task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>Comedy Cartoon</span><span>PixVerse Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Provider Pending</span></div>",
-          "{task.blocker ? 'Provider unavailable — waiting for free quota…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}":"{task.blocker ? 'Blocked — waiting for Alex…' : isKai ? 'Waiting for real free provider integration…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}",
-          "{task.blocker ? 'BLOCKED' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}":"{task.blocker ? 'BLOCKED' : isKai ? 'READY' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}",
-          "{task.blocker ? (isKai ? 'Quota Blocked' : '✓ Clear Blocker') : '⚠ Raise Blocker'}":"{task.blocker ? '✓ Clear Blocker' : isKai ? 'Provider Pending' : '⚠ Raise Blocker'}",
-          "agent.id === 'implement' ? 'HeyGen Free quota blocked' : 'Blocked — need Alex'":"agent.id === 'implement' ? 'Waiting for free provider integration' : 'Blocked — need Alex'"
+          p = Path('frontend/src/main.tsx')
+          s = p.read_text()
+
+          replacements = {
+            "const KAI_PROVIDER_PENDING = 'Waiting for real free video provider integration. FREE ONLY is enabled; no paid fallback will be used.';":
+              "const KAI_PROVIDER_PENDING = 'Free video router is waiting for a real provider integration. Route: PixVerse Free → Leonardo Free → Runway Free/Trial. FREE ONLY; no paid fallback.';",
+            "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Google Drive', 'Automation'],":
+              "implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Leonardo Free', 'Runway Free/Trial', 'Google Drive', 'Automation'],",
+            "if (/video|cartoon|comedy|heygen|pixverse|reel|short|promo/.test(q)) return 'implement';":
+              "if (/video|cartoon|comedy|pixverse|leonardo|runway|reel|short|promo/.test(q)) return 'implement';",
+            "provider: 'PixVerse Free'": "provider: 'Free Video Router'",
+            "provider: isKai ? 'PixVerse Free'": "provider: isKai ? 'Free Video Router'",
+            "provider: dueRecurring.provider ?? 'PixVerse Free'": "provider: dueRecurring.provider ?? 'Free Video Router'",
+            "<p className=\"kai-note\">Alex prepares comedy-cartoon video briefs for Kai. PixVerse Free is the selected UI route, but no real provider API is connected yet. Kai remains READY and tasks wait for provider integration. No task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>Comedy Cartoon</span><span>PixVerse Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Provider Pending</span></div>":
+              "<p className=\"kai-note\">Free routing order: PixVerse Free → Leonardo Free → Runway Free/Trial. No real provider API is connected yet, so this router is policy/UI only. Kai stays READY and no task is marked complete until a real MP4 exists.</p><div className=\"skill-tags\"><span>PixVerse Free</span><span>Leonardo Free</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div>",
+            "Waiting for real free provider integration…": "Free router waiting for provider integration…",
+            "Waiting for free provider integration": "Free router waiting for provider integration",
+            "HeyGen Free quota blocked": "Free provider integration pending",
+            "HeyGen Free Avatar IV monthly limit reached": "Free provider integration pending"
           }
-          for old,new in reps.items():
+
+          for old, new in replacements.items():
               if old in s:
-                  s=s.replace(old,new)
-              else:
-                  print('WARN missing:',old[:100])
+                  s = s.replace(old, new)
+
+          # Remove any remaining HeyGen labels without pretending another API is connected.
+          s = s.replace('HeyGen Free', 'Free Video Router')
           p.write_text(s)
           PY
-      - name: Commit patch
+      - name: Commit Kai router update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/src/main.tsx
           git diff --cached --quiet && exit 0
-          git commit -m "Fix Kai stale blocked state and provider messaging"
+          git commit -m "Route Kai through free video providers"
           git push
