@@ -51,6 +51,7 @@
   </aside>
 </div>
 <footer>Health Monitoring AI Agents Office • Demo / prototype data only</footer>
+<script src="./security-gate.js"></script>
 <script>
   const hr=document.getElementById('heartRate'), sp=document.getElementById('spo2'), st=document.getElementById('steps'), oa=document.getElementById('openAlerts');
   setInterval(()=>{hr.textContent=String(70+Math.floor(Math.random()*6));sp.textContent=String(97+Math.floor(Math.random()*3));st.textContent=(6.3+Math.random()*.4).toFixed(1)+'k'},3000);
