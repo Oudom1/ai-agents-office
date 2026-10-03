@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Health Monitoring AI Agents Office</title>
+  <style>
+    :root{--bg:#06111d;--panel:#0b1a2b;--panel2:#0e2233;--line:#244761;--text:#e7f3fb;--muted:#7899ad;--cyan:#59e0e9;--green:#57e29a;--amber:#ffc966;--red:#ff7b8b;--blue:#5aa2ff}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#10354b 0,#071522 38%,#050d17 100%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh}
+    header{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #18374b;background:#071421e8;position:sticky;top:0;z-index:10;backdrop-filter:blur(10px)}
+    h1{font-size:20px;margin:0;letter-spacing:.7px}.sub{font-size:11px;color:var(--muted);margin-top:4px}.top-actions{display:flex;gap:9px;align-items:center}.pill,.back{border:1px solid #28536c;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:800;text-decoration:none;color:#cdeafa;background:#0d2332}.pill.online{color:#98f3c0;border-color:#267455;background:#0b2d23}
+    .wrap{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;padding:16px;max-width:1650px;margin:auto}.office{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:minmax(105px,auto);gap:12px;background-image:linear-gradient(45deg,#0b2030 25%,transparent 25%),linear-gradient(-45deg,#0b2030 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#0b2030 75%),linear-gradient(-45deg,transparent 75%,#0b2030 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0;padding:12px;border:1px solid #183a50;border-radius:16px}
+    .room{border:1px solid var(--line);border-radius:12px;padding:12px;background:linear-gradient(180deg,#0b1b2aee,#091522ee);box-shadow:inset 0 0 24px #0c2d3d55}.room h3{font-size:10px;letter-spacing:1px;margin:0 0 10px;color:#9ecce0}.command{grid-column:span 4}.alerts{grid-column:span 4}.patients{grid-column:span 4}.floor{grid-column:1/-1;min-height:335px}.break{grid-column:span 6}.wellness{grid-column:span 6}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.metric{background:#07131f;border:1px solid #18394e;border-radius:10px;padding:10px}.metric span{display:block;font-size:9px;color:#7d9eb1}.metric b{font-size:21px;display:block;margin-top:4px}.metric small{font-size:8px;color:#61e8aa}.metric.warn small{color:var(--amber)}
+    .alert{padding:8px 9px;border-radius:8px;border:1px solid #6a3a43;background:#321922;margin:6px 0;font-size:9px;color:#ffd5da}.alert.ok{border-color:#285c49;background:#112a22;color:#bdf4d3}.patient-row{display:flex;justify-content:space-between;gap:8px;font-size:9px;padding:7px 0;border-bottom:1px solid #173144}.patient-row:last-child{border-bottom:0}.patient-row b{color:#dff5ff}.tag{font-size:8px;padding:3px 6px;border-radius:999px;background:#102d3c;border:1px solid #24536c;color:#9fcee2}.tag.green{background:#0f2f25;border-color:#287554;color:#9cf4c3}.tag.amber{background:#332817;border-color:#775d25;color:#ffd98c}
+    .agents{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.agent{min-height:138px;border:1px solid #234861;border-radius:12px;background:#0b1b2a;padding:12px;position:relative;overflow:hidden}.agent:before{content:"";position:absolute;inset:auto -25px -40px auto;width:120px;height:120px;border-radius:50%;background:#1c536840;filter:blur(4px)}.avatar{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:900;color:#06111d;background:linear-gradient(135deg,#62e5ec,#68f0ad);margin-bottom:8px}.agent h4{margin:0;font-size:12px}.agent p{margin:3px 0 7px;color:#7ea0b4;font-size:9px;line-height:1.35}.skills{display:flex;gap:4px;flex-wrap:wrap}.skills span{font-size:7px;border:1px solid #28536b;border-radius:999px;padding:3px 5px;color:#add7e8}.state{position:absolute;right:9px;top:9px;font-size:7px;border-radius:999px;padding:4px 6px;background:#0e3a2c;color:#91f1ba;border:1px solid #28775a}.agent.alerting .state{background:#3a2025;color:#ffbdc5;border-color:#7e424c}
+    aside{display:flex;flex-direction:column;gap:12px}.panel{border:1px solid #21445d;border-radius:14px;background:#091827;padding:14px}.panel h2{font-size:13px;margin:0 0 10px}.panel p{font-size:9px;color:#7f9db0;line-height:1.55}.task{padding:9px;border:1px solid #20445b;border-radius:10px;margin:7px 0;background:#0b1d2c}.task b{font-size:10px;display:block}.task small{font-size:8px;color:#7898ab}.bar{height:6px;border-radius:999px;background:#142d3e;overflow:hidden;margin-top:7px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#4aa4ff,#55e3c2);width:65%}.btn{width:100%;border:1px solid #276080;background:#123a52;color:#e4f6ff;padding:10px;border-radius:9px;font-weight:800;cursor:pointer;margin-top:8px}.btn.red{background:#351a22;border-color:#87414d;color:#ffd7dc}.notice{font-size:8px;color:#7d9bab;margin-top:8px;line-height:1.45}.chart{height:92px;position:relative;margin-top:8px;border-radius:9px;background:linear-gradient(180deg,#0b2234,#07131f);border:1px solid #18394e;overflow:hidden}.chart svg{width:100%;height:100%}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.legend span{font-size:7px;color:#8dafc1}.legend i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-right:3px}.legend span:nth-child(2) i{background:var(--green)}.legend span:nth-child(3) i{background:var(--amber)}
+    footer{font-size:8px;color:#648397;text-align:center;padding:12px 20px 20px}.pulse{animation:pulse 1.8s infinite}@keyframes pulse{50%{box-shadow:0 0 18px #55e2b966}}
+    @media(max-width:1050px){.wrap{grid-template-columns:1fr}.agents{grid-template-columns:repeat(2,1fr)}aside{display:grid;grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.command,.alerts,.patients,.break,.wellness{grid-column:1/-1}.metric-grid{grid-template-columns:repeat(2,1fr)}.agents{grid-template-columns:1fr}aside{display:block}.panel{margin-bottom:10px}.top-actions{flex-wrap:wrap;justify-content:flex-end}}
+  </style>
+</head>
+<body>
+<header>
+  <div><h1>HEALTH MONITORING AI AGENTS OFFICE</h1><div class="sub">Synthetic monitoring dashboard • agent coordination • alert escalation</div></div>
+  <div class="top-actions"><a class="back" href="./">← AI Agents Office</a><span class="pill online">● MONITORING ONLINE</span></div>
+</header>
+<div class="wrap">
+  <section class="office">
+    <div class="room command"><h3>HEALTH COMMAND</h3><div class="metric-grid"><div class="metric"><span>Monitored Profiles</span><b>24</b><small>Stable</small></div><div class="metric"><span>Open Alerts</span><b id="openAlerts">2</b><small class="pulse">Needs review</small></div><div class="metric"><span>Agent Tasks</span><b>6</b><small>Running</small></div><div class="metric"><span>Escalations</span><b>1</b><small>Pending</small></div></div></div>
+    <div class="room alerts"><h3>ALERT QUEUE</h3><div class="alert">High resting heart-rate trend detected in Demo Profile A</div><div class="alert">Sleep duration below configured target for 3 nights</div><div class="alert ok">Medication schedule check completed for Demo Profile B</div></div>
+    <div class="room patients"><h3>MONITORED PROFILES</h3><div class="patient-row"><b>Demo Profile A</b><span class="tag amber">Review</span></div><div class="patient-row"><b>Demo Profile B</b><span class="tag green">Stable</span></div><div class="patient-row"><b>Demo Profile C</b><span class="tag green">Stable</span></div><div class="patient-row"><b>Demo Profile D</b><span class="tag">Monitoring</span></div></div>
+
+    <div class="room floor"><h3>HEALTH OPERATIONS FLOOR</h3><div class="agents">
+      <div class="agent"><span class="state">working</span><div class="avatar">A</div><h4>Ava</h4><p>Health Operations Manager</p><div class="skills"><span>Management</span><span>Research</span><span>Escalation</span><span>Task Assignment</span></div></div>
+      <div class="agent alerting"><span class="state">alerting</span><div class="avatar">P</div><h4>Pulse</h4><p>Vital Signs Monitor</p><div class="skills"><span>Heart Rate</span><span>BP</span><span>SpO₂</span><span>Trend Detection</span></div></div>
+      <div class="agent"><span class="state">working</span><div class="avatar">L</div><h4>Luna</h4><p>Lab Trend Analyst</p><div class="skills"><span>Labs</span><span>Trends</span><span>Reference Ranges</span><span>Reports</span></div></div>
+      <div class="agent"><span class="state">working</span><div class="avatar">M</div><h4>Medi</h4><p>Medication & Schedule Monitor</p><div class="skills"><span>Schedules</span><span>Reminders</span><span>Interactions</span><span>Adherence</span></div></div>
+      <div class="agent"><span class="state">working</span><div class="avatar">N</div><h4>Nova</h4><p>Wellness Coach</p><div class="skills"><span>Sleep</span><span>Activity</span><span>Nutrition</span><span>Habits</span></div></div>
+      <div class="agent alerting"><span class="state">escalating</span><div class="avatar">E</div><h4>Echo</h4><p>Alert & Escalation Coordinator</p><div class="skills"><span>Triage</span><span>Escalation</span><span>Follow-up</span><span>Audit Trail</span></div></div>
+    </div></div>
+
+    <div class="room break"><h3>WELLNESS TREND</h3><div class="chart"><svg viewBox="0 0 500 100" preserveAspectRatio="none"><polyline fill="none" stroke="#59e0e9" stroke-width="2" points="0,70 50,58 100,64 150,50 200,53 250,43 300,48 350,36 400,41 450,31 500,35"/><polyline fill="none" stroke="#57e29a" stroke-width="2" points="0,75 50,72 100,65 150,68 200,58 250,60 300,52 350,55 400,47 450,49 500,42"/></svg></div><div class="legend"><span><i></i>Activity</span><span><i></i>Sleep quality</span></div></div>
+    <div class="room wellness"><h3>DAILY SUMMARY</h3><div class="metric-grid"><div class="metric"><span>Avg HR</span><b id="heartRate">72</b><small>bpm</small></div><div class="metric"><span>SpO₂</span><b id="spo2">98</b><small>%</small></div><div class="metric"><span>Steps</span><b id="steps">6.4k</b><small>today</small></div><div class="metric warn"><span>Sleep</span><b>6h 12m</b><small>below target</small></div></div></div>
+  </section>
+
+  <aside>
+    <div class="panel"><h2>Ava • Health Manager Control</h2><p>Ava coordinates the monitoring agents, reviews alerts, assigns follow-up tasks, and escalates issues that need human review.</p><button class="btn" id="assignBtn">Assign Alert Review to Pulse</button><button class="btn" id="summaryBtn">Generate Daily Summary</button></div>
+    <div class="panel"><h2>Active Health Tasks</h2><div class="task"><b>Review elevated HR trend</b><small>Pulse • In progress</small><div class="bar"><i style="width:72%"></i></div></div><div class="task"><b>Compare sleep trend</b><small>Nova • In progress</small><div class="bar"><i style="width:48%"></i></div></div><div class="task"><b>Prepare alert escalation note</b><small>Echo • Waiting</small><div class="bar"><i style="width:22%"></i></div></div></div>
+    <div class="panel"><h2>Alert Actions</h2><button class="btn" id="ackBtn">Acknowledge Top Alert</button><button class="btn red" id="clearBtn">Clear Demo Alerts</button><div class="notice">This page uses synthetic demo data only. It is a monitoring UI prototype, not a diagnostic system and not a substitute for professional medical care.</div></div>
+    <div class="panel"><h2>Integration Ready</h2><p>Future connectors can feed real data from health records, Apple Health, wearables, labs, and scheduling systems. Keep personal health data behind authenticated APIs rather than inside the public GitHub Pages frontend.</p></div>
+  </aside>
+</div>
+<footer>Health Monitoring AI Agents Office • Demo / prototype data only</footer>
+<script>
+  const hr=document.getElementById('heartRate'), sp=document.getElementById('spo2'), st=document.getElementById('steps'), oa=document.getElementById('openAlerts');
+  setInterval(()=>{hr.textContent=String(70+Math.floor(Math.random()*6));sp.textContent=String(97+Math.floor(Math.random()*3));st.textContent=(6.3+Math.random()*.4).toFixed(1)+'k'},3000);
+  document.getElementById('ackBtn').onclick=()=>{oa.textContent=Math.max(0,Number(oa.textContent)-1);alert('Top demo alert acknowledged by Ava.');};
+  document.getElementById('clearBtn').onclick=()=>{oa.textContent='0';document.querySelectorAll('.alert').forEach(x=>x.style.opacity='.35');};
+  document.getElementById('assignBtn').onclick=()=>alert('Ava assigned the alert review to Pulse.');
+  document.getElementById('summaryBtn').onclick=()=>alert('Daily health summary prepared from the synthetic demo metrics.');
+</script>
+</body>
+</html>
