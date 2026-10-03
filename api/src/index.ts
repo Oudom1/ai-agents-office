@@ -127,7 +127,7 @@ app.post('/api/auth/handshake',(req,res)=>{
   });
 });
 
-app.post('/api/auth/login',(req,res)=>{
+app.post('/api/auth/login',async(req,res)=>{
   if(!ADMIN_PASSWORD && !databaseConfigured()) return res.status(503).json({error:'Security backend is not configured'});
   const ip=req.ip || req.socket?.remoteAddress || 'unknown';
   const now=Date.now();
