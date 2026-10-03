@@ -42,6 +42,8 @@ const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
 const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
 const WORK_START_HOUR = 8;
 const WORK_END_HOUR = 18;
+const KAI_FREE_VIDEO_AVAILABLE = false;
+const KAI_PROVIDER_BLOCKER = 'HeyGen Free blocked: Avatar IV monthly limit reached. FREE ONLY is enabled, so no paid fallback will be used.';
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 13, y: 18}, home: {x: 13, y: 18}},
@@ -59,7 +61,7 @@ const agentSkills: Record<string, string[]> = {
   security: ['Security', 'IAM', 'Access Review', 'Graylog', 'Compliance'],
   cloud: ['Cloud', 'Azure', 'Infrastructure', 'Networking', 'Deployment'],
   qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review'],
-  implement: ['Implementation', 'Video', 'HeyGen', 'Google Drive', 'Automation'],
+  implement: ['Implementation', 'Video', 'Comedy Cartoon', 'HeyGen', 'Google Drive', 'Automation'],
   developer: ['React', 'TypeScript', 'Python', 'Java', 'GitHub', 'Portfolio']
 };
 
@@ -106,7 +108,7 @@ function loadLocalTasks(): Task[] {
 function bestAgentForTask(title: string) {
   const q = title.toLowerCase();
   if (/portfolio|react|typescript|python|java|code|developer|github|website|web/.test(q)) return 'developer';
-  if (/video|cartoon|heygen|reel|short|promo/.test(q)) return 'implement';
+  if (/video|cartoon|comedy|heygen|reel|short|promo/.test(q)) return 'implement';
   if (/security|iam|access|graylog|audit|compliance|vulnerability/.test(q)) return 'security';
   if (/cloud|azure|network|infrastructure|deploy|server/.test(q)) return 'cloud';
   if (/test|uat|qa|quality|validate|verification/.test(q)) return 'qa';
@@ -144,6 +146,28 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    setTasks(prev => prev.map(t => {
+      const wasFakeKaiComplete = t.agentId === 'implement' && t.status === 'done' && t.driveUrl === GOOGLE_DRIVE_PLACEHOLDER;
+      if (!wasFakeKaiComplete) return t;
+      return {
+        ...t,
+        status: 'active',
+        phase: 'free-check',
+        completedAt: undefined,
+        driveUrl: undefined,
+        resultMessage: undefined,
+        nextRunAt: undefined,
+        startedAt: undefined,
+        blocker: KAI_PROVIDER_BLOCKER
+      };
+    }));
+    if (!KAI_FREE_VIDEO_AVAILABLE) {
+      const kai = fallbackAgents.find(a => a.id === 'implement');
+      if (kai) setAgents(prev => prev.map(a => a.id === 'implement' ? {...a, state: 'blocked', destination: {x: 85, y: 18}} : a));
+    }
+  }, []);
+
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -162,7 +186,7 @@ function App() {
     const hour = new Date(now).getHours();
     const inWorkHours = hour >= WORK_START_HOUR && hour < WORK_END_HOUR;
     setAgents(prev => prev.map(a => {
-      if (a.id === 'manager' || a.currentTask) return a;
+      if (a.id === 'manager' || a.currentTask || (a.id === 'implement' && !KAI_FREE_VIDEO_AVAILABLE)) return a;
       if (inWorkHours) {
         if (a.state === 'break' || a.state === 'coffee' || a.state === 'off-duty') return {...a, state: 'working', destination: a.home};
         return a;
@@ -200,6 +224,11 @@ function App() {
   const startLocalTaskMotion = (agentId: string, title: string, taskId: string) => {
     const a = agents.find(x => x.id === agentId);
     if (!a) return;
+    if (agentId === 'implement' && !KAI_FREE_VIDEO_AVAILABLE) {
+      updateLocal(agentId, {state: 'blocked', currentTask: title, destination: {x: 85, y: 18}});
+      patchTask(taskId, {phase: 'free-check', blocker: KAI_PROVIDER_BLOCKER, startedAt: undefined});
+      return;
+    }
     updateLocal(agentId, {state: 'assigned-task', currentTask: title, destination: {x: 35, y: 18}});
     patchTask(taskId, {phase: agentId === 'implement' ? 'free-check' : 'received'});
     window.setTimeout(() => {
@@ -215,16 +244,23 @@ function App() {
   const addLocalTask = (agentId: string, title: string) => {
     const isKai = agentId === 'implement';
     const isLeo = agentId === 'developer';
+    const kaiBlocked = isKai && !KAI_FREE_VIDEO_AVAILABLE;
     const id = crypto.randomUUID();
     const task: Task = {
-      id, agentId, title, status: 'active', phase: 'queued', createdAt: new Date().toISOString(),
+      id, agentId, title, status: 'active', phase: kaiBlocked ? 'free-check' : 'queued', createdAt: new Date().toISOString(),
       provider: isKai ? 'HeyGen Free' : isLeo ? 'Developer Workspace' : 'Internal Demo',
       freeOnly: isKai,
-      durationSec: isKai ? 24 : isLeo ? 45 : 12,
-      recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined
+      durationSec: kaiBlocked ? undefined : isKai ? 24 : isLeo ? 45 : 12,
+      recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined,
+      blocker: kaiBlocked ? KAI_PROVIDER_BLOCKER : undefined
     };
     setTasks(prev => [task, ...prev]);
-    startLocalTaskMotion(agentId, title, id);
+    if (kaiBlocked) {
+      updateLocal('implement', {state: 'blocked', currentTask: title, destination: {x: 85, y: 18}});
+      setNotice('Kai blocked — HeyGen Free Avatar IV monthly limit reached');
+    } else {
+      startLocalTaskMotion(agentId, title, id);
+    }
     return task;
   };
 
@@ -233,7 +269,9 @@ function App() {
     setSelected('implement');
     addLocalTask('implement', title);
     setTaskTitle('');
-    setNotice(name === 'IT Comedy' ? 'Kai received a fresh IT Comedy idea and started a new video task' : `Kai started ${name}`);
+    setNotice(KAI_FREE_VIDEO_AVAILABLE
+      ? (name === 'IT Comedy' ? 'Kai received a fresh IT Comedy idea and started a new video task' : `Kai started ${name}`)
+      : 'Alex prepared the brief, but Kai is blocked by the HeyGen Free monthly limit');
   };
 
   const launchLeoTemplate = (name: string, prompt: string) => {
@@ -247,6 +285,14 @@ function App() {
     if (!taskTitle.trim()) return;
     const title = taskTitle.trim();
     const targetAgent = forcedAgentId ?? selected;
+
+    if (targetAgent === 'implement') {
+      addLocalTask(targetAgent, title);
+      setTaskTitle('');
+      setSelected(targetAgent);
+      return;
+    }
+
     try {
       const r = await fetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
@@ -270,12 +316,19 @@ function App() {
   const completeTask = (task: Task, auto = false) => {
     const isKai = task.agentId === 'implement';
     const isLeo = task.agentId === 'developer';
+
+    if (isKai && !task.driveUrl) {
+      patchTask(task.id, {status: 'active', phase: 'free-check', blocker: KAI_PROVIDER_BLOCKER, completedAt: undefined, resultMessage: undefined, nextRunAt: undefined});
+      updateLocal('implement', {state: 'blocked', currentTask: task.title, destination: {x: 85, y: 18}});
+      setNotice('Kai cannot complete — no real MP4 exists because HeyGen Free quota is blocked');
+      return;
+    }
+
     patchTask(task.id, {
       status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
-      driveUrl: isKai ? GOOGLE_DRIVE_PLACEHOLDER : undefined,
       nextRunAt: isKai ? new Date(Date.now() + KAI_REFRESH_MS).toISOString() : undefined,
       resultMessage: isKai
-        ? 'Complete — Kai finished this cycle. The same video task is scheduled to refresh again in 4 hours.'
+        ? 'Complete — real video file is ready in Google Drive. The next 4-hour cycle can run when free quota is available.'
         : isLeo
         ? 'Complete — Leo finished the development task and it is ready for review.'
         : 'Complete — task finished successfully.'
@@ -288,11 +341,17 @@ function App() {
       const a = agents.find(x => x.id === task.agentId);
       updateLocal(task.agentId, {state: 'working', currentTask: undefined, destination: a?.home});
     }
-    setNotice(isKai ? 'Complete — video ready, open Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
+    setNotice(isKai ? 'Complete — real video ready in Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
   };
 
   const toggleBlocker = (task: Task) => {
     const name = agents.find(a => a.id === task.agentId)?.name ?? 'Agent';
+    if (task.agentId === 'implement' && !KAI_FREE_VIDEO_AVAILABLE) {
+      patchTask(task.id, {blocker: KAI_PROVIDER_BLOCKER, phase: 'free-check'});
+      updateLocal(task.agentId, {state: 'blocked'});
+      setNotice('Kai blocker cannot be cleared until HeyGen Free quota becomes available');
+      return;
+    }
     const blocker = task.blocker ? undefined : `${name} needs Alex support / decision to continue this task.`;
     patchTask(task.id, {blocker});
     updateLocal(task.agentId, {state: blocker ? 'blocked' : 'working-task'});
@@ -305,6 +364,7 @@ function App() {
   }, [tasks, now]);
 
   useEffect(() => {
+    if (!KAI_FREE_VIDEO_AVAILABLE) return;
     const dueRecurring = tasks.find(t => t.agentId === 'implement' && t.status === 'done' && t.nextRunAt &&
       new Date(t.nextRunAt).getTime() <= now &&
       !tasks.some(a => a.status !== 'done' && a.agentId === 'implement' && (a.sourceTaskId === t.id || a.title === t.title)));
@@ -328,7 +388,7 @@ function App() {
   const doneTasks = tasks.filter(t => t.status === 'done');
   const blockers = activeTasks.filter(t => t.blocker);
 
-  const selectedPlaceholder = selected === 'implement' ? 'Give Kai a video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
+  const selectedPlaceholder = selected === 'implement' ? 'Give Kai a comedy cartoon video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
   return (
@@ -376,7 +436,7 @@ function App() {
             <button className="secondary" disabled={!taskTitle.trim()} onClick={alexAutoAssign}>Alex Auto-Assign by Skill</button>
           </div>
 
-          {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><p className="kai-note">Click a quick template to send a new video task directly to Kai. IT Comedy creates a fresh IT scenario on every click and keeps the 4-hour refresh cycle enabled.</p><div className="skill-tags"><span>HeyGen Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Refresh Every 4h</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
+          {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><p className="kai-note">Alex prepares comedy-cartoon video briefs for Kai. Current real provider state: HeyGen Free Avatar IV monthly limit reached, so Kai stays BLOCKED and no task is marked complete until a real MP4 exists.</p><div className="skill-tags"><span>Comedy Cartoon</span><span>HeyGen Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Quota Blocked</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
           {selected === 'developer' && <div className="panel developer-panel"><div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div><p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p><div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span></div><label>Quick development tasks</label><div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
@@ -396,7 +456,7 @@ function ActiveTaskCard({task, agentName, now, onComplete, onBlocker}: {task: Ta
   const progress = getProgressPercent(task, now);
   const isKai = task.agentId === 'implement';
   const isLeo = task.agentId === 'developer';
-  return <div className="task-card"><div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{task.blocker ? 'Blocked' : friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">AUTO 4H</span>}{isLeo && <span className="task-provider">DEV</span>}</div><b>{task.title}</b>{task.blocker && <p className="result-msg" style={{color:'#ff9eaa'}}>⚠ {task.blocker}</p>}<div className="task-timer"><div className="timer-bar"><i style={{width: `${progress}%`}} /></div><div className="timer-line"><span>{task.blocker ? 'Waiting for Alex…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.blocker ? 'BLOCKED' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div></div><div className="task-bottom"><span>{timeAgo(task.createdAt)}</span><div style={{display:'flex',gap:'5px'}}><button onClick={onBlocker} style={{background:task.blocker?'#3c5b32':'#5a2832',borderColor:task.blocker?'#60834e':'#8f3d4b'}}>{task.blocker ? '✓ Clear Blocker' : '⚠ Raise Blocker'}</button>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div></div></div>;
+  return <div className="task-card"><div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{task.blocker ? 'Blocked' : friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">REAL FILE REQUIRED</span>}{isLeo && <span className="task-provider">DEV</span>}</div><b>{task.title}</b>{task.blocker && <p className="result-msg" style={{color:'#ff9eaa'}}>⚠ {task.blocker}</p>}<div className="task-timer"><div className="timer-bar"><i style={{width: `${task.blocker ? 8 : progress}%`}} /></div><div className="timer-line"><span>{task.blocker ? 'Provider unavailable — waiting for free quota…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.blocker ? 'BLOCKED' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div></div><div className="task-bottom"><span>{timeAgo(task.createdAt)}</span><div style={{display:'flex',gap:'5px'}}><button onClick={onBlocker} style={{background:task.blocker?'#3c5b32':'#5a2832',borderColor:task.blocker?'#60834e':'#8f3d4b'}}>{task.blocker ? (isKai ? 'Quota Blocked' : '✓ Clear Blocker') : '⚠ Raise Blocker'}</button>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div></div></div>;
 }
 
 function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) { return <div className="result-card"><div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div><b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p><div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>{task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}{task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}</div>; }
@@ -412,6 +472,6 @@ function Room({x, y, w, h, title, cls}: {x: number; y: number; w: number; h: num
 function Desk({x, y}: {x: number; y: number}) { return <div className="desk" style={{left: `${x}%`, top: `${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>; }
 function TaskLights({completed}: {completed: number}) { const pct = Math.round((completed / TASK_TARGET) * 100); return <div className="task-progress"><div className="task-lights" aria-label={`${completed} of ${TASK_TARGET} tasks completed`}>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task <b>{pct}%</b></span></div>; }
 function MiniProgress({completed}: {completed: number}) { return <div className="mini-progress"><div>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task</span></div>; }
-function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? 'Blocked — need Alex' : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
+function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? (agent.id === 'implement' ? 'HeyGen Free quota blocked' : 'Blocked — need Alex') : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
