@@ -24,6 +24,8 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build -w frontend
+      - name: Add Leo portfolio site
+        run: cp -r portfolio frontend/dist/portfolio
       - uses: actions/configure-pages@v5
         with:
           enablement: true
