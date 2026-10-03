@@ -33,7 +33,15 @@ type Task = {
   blocker?: string;
 };
 
-const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
+const API = API_BASE + '/api';
+const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const headers = new Headers(init.headers || {});
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) headers.set('Authorization', 'Bearer ' + token);
+  return fetch(input, {...init, headers});
+}
 const TASK_TARGET = 12;
 const STORAGE_KEY = 'ai-agents-office-tasks-v3';
 const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/folders/1SDKs0stvoeIkYIhEcP5znRq7-tSyaEpl';
@@ -127,7 +135,7 @@ function App() {
 
   const refresh = async () => {
     try {
-      const [a, t] = await Promise.all([fetch(`${API}/agents`), fetch(`${API}/tasks`)]);
+      const [a, t] = await Promise.all([authFetch(`${API}/agents`), authFetch(`${API}/tasks`)]);
       if (a.ok) {
         const data = await a.json();
         if (Array.isArray(data) && data.length) {
@@ -203,7 +211,7 @@ function App() {
 
   const call = async () => {
     try {
-      const r = await fetch(`${API}/manager/call/${selected}`, {method: 'POST'});
+      const r = await authFetch(`${API}/manager/call/${selected}`, {method: 'POST'});
       if (!r.ok) throw 0;
       await refresh();
     } catch { updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}}); }
@@ -211,7 +219,7 @@ function App() {
 
   const state = async (s: string) => {
     try {
-      const r = await fetch(`${API}/agents/${selected}/state`, {
+      const r = await authFetch(`${API}/agents/${selected}/state`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({state: s})
       });
       if (!r.ok) throw 0;
@@ -296,7 +304,7 @@ function App() {
     }
 
     try {
-      const r = await fetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
+      const r = await authFetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
       setTaskTitle('');
       await refresh();
