@@ -1,5 +1,5 @@
 (()=>{
-  const CFG_KEY='ai-office-security-config-v1';
+  const CFG_KEY='ai-office-security-config-v2';
   const LOG_KEY='ai-office-security-logs-v1';
   const SESSION_KEY='ai-office-security-session-v1';
   const MAX_LOGS=100;
@@ -39,7 +39,7 @@
     box.querySelector('#ai-log-clear')?.addEventListener('click',()=>{localStorage.removeItem(LOG_KEY);wrap.remove();showLogs()});
   }
 
-  function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+  function escapeHtml(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
 
   function addSecurityButton(){
     if(document.getElementById('ai-security-button'))return;
@@ -51,6 +51,10 @@
   function lockPage(){document.documentElement.style.overflow='hidden'}
   function unlockPage(){document.documentElement.style.overflow='';sessionStorage.setItem(SESSION_KEY,'ok');addSecurityButton()}
 
+  function strongPassword(password){
+    return password.length>=15 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
+  }
+
   function gate(){
     if(sessionStorage.getItem(SESSION_KEY)==='ok'){addSecurityButton();return}
     lockPage();
@@ -59,17 +63,17 @@
     style(overlay,{position:'fixed',inset:'0',zIndex:'100000',display:'grid',placeItems:'center',padding:'20px',background:'radial-gradient(circle at 50% 0,#10354b 0,#06111d 45%,#030911 100%)',fontFamily:'Inter,Segoe UI,Arial,sans-serif',color:'#e8f4fb'});
     const card=document.createElement('div');style(card,{width:'min(430px,94vw)',background:'#091827',border:'1px solid #244761',borderRadius:'16px',padding:'22px',boxShadow:'0 28px 70px rgba(0,0,0,.5)'});
     let cfg=null;try{cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'null')}catch{}
-    const setup=!cfg?.pinHash;
-    card.innerHTML=`<div style="font-size:10px;letter-spacing:1px;color:#66dbe8;font-weight:900">AI AGENTS OFFICE SECURITY</div><h2 style="margin:7px 0 5px;font-size:20px">${setup?'Set Access PIN':'Secure Access Required'}</h2><p style="font-size:10px;line-height:1.5;color:#7f9fb1;margin:0 0 14px">${setup?'Create a local admin PIN for this browser.':'Enter your admin name and PIN to continue.'}</p><label style="font-size:9px;color:#9fc3d5">Admin name</label><input id="ai-sec-user" autocomplete="username" value="${escapeHtml(cfg?.user||'Admin')}" style="width:100%;margin:5px 0 10px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none"><label style="font-size:9px;color:#9fc3d5">PIN</label><input id="ai-sec-pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Minimum 4 digits" style="width:100%;margin:5px 0 10px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none"><div id="ai-sec-msg" style="min-height:17px;font-size:9px;color:#ff9eaa"></div><button id="ai-sec-enter" style="width:100%;padding:10px;border-radius:8px;border:1px solid #2b6d87;background:#123d55;color:#e9f8ff;font-weight:900;cursor:pointer">${setup?'Create PIN & Enter':'Unlock Office'}</button><button id="ai-sec-review" style="width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid #355468;background:#0c2534;color:#bfe7f7;font-weight:800;cursor:pointer">Review Attempt Logs</button><div style="margin-top:10px;font-size:8px;line-height:1.4;color:#63869a">Local security layer: access attempts are stored in this browser. For strong internet-wide protection, use host-level authentication such as Cloudflare Access.</div>`;
+    const setup=!cfg?.passwordHash;
+    card.innerHTML=`<div style="font-size:10px;letter-spacing:1px;color:#66dbe8;font-weight:900">AI AGENTS OFFICE SECURITY</div><h2 style="margin:7px 0 5px;font-size:20px">${setup?'Set Access Password':'Secure Access Required'}</h2><p style="font-size:10px;line-height:1.5;color:#7f9fb1;margin:0 0 14px">${setup?'Create a strong local admin password for this browser.':'Enter your admin name and password to continue.'}</p><label style="font-size:9px;color:#9fc3d5">Admin name</label><input id="ai-sec-user" autocomplete="username" value="${escapeHtml(cfg?.user||'Admin')}" style="width:100%;margin:5px 0 10px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none"><label style="font-size:9px;color:#9fc3d5">Password</label><input id="ai-sec-pin" type="password" autocomplete="current-password" placeholder="Minimum 15 characters" style="width:100%;margin:5px 0 7px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none"><div style="font-size:8px;line-height:1.5;color:#8fb1c4;margin-bottom:8px">Required: at least 15 characters with <b>uppercase</b>, <b>lowercase</b>, <b>number</b>, and <b>special character</b>.</div><div id="ai-sec-msg" style="min-height:17px;font-size:9px;color:#ff9eaa"></div><button id="ai-sec-enter" style="width:100%;padding:10px;border-radius:8px;border:1px solid #2b6d87;background:#123d55;color:#e9f8ff;font-weight:900;cursor:pointer">${setup?'Create Password & Enter':'Unlock Office'}</button><button id="ai-sec-review" style="width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid #355468;background:#0c2534;color:#bfe7f7;font-weight:800;cursor:pointer">Review Attempt Logs</button><div style="margin-top:10px;font-size:8px;line-height:1.4;color:#63869a">Local security layer: access attempts are stored in this browser. For strong internet-wide protection, use host-level authentication such as Cloudflare Access.</div>`;
     overlay.appendChild(card);document.body.appendChild(overlay);
     const user=card.querySelector('#ai-sec-user'),pin=card.querySelector('#ai-sec-pin'),msg=card.querySelector('#ai-sec-msg');
     card.querySelector('#ai-sec-review').onclick=showLogs;
     async function submit(){
-      const u=user.value.trim()||'Admin',p=pin.value.trim();
-      if(!/^\d{4,12}$/.test(p)){msg.textContent='Use a 4–12 digit PIN.';addLog('FAILED',u,'Invalid PIN format');return}
-      const pinHash=await hashText(p);
-      if(setup){localStorage.setItem(CFG_KEY,JSON.stringify({user:u,pinHash,createdAt:nowIso()}));addLog('SUCCESS',u,'Security PIN created');overlay.remove();unlockPage();return}
-      if(pinHash!==cfg.pinHash){msg.textContent='Access denied. Attempt logged.';addLog('FAILED',u,'Wrong PIN');pin.value='';pin.focus();return}
+      const u=user.value.trim()||'Admin',p=pin.value;
+      if(!strongPassword(p)){msg.textContent='Use 15+ characters with uppercase, lowercase, number, and special character.';addLog('FAILED',u,'Invalid password format');return}
+      const passwordHash=await hashText(p);
+      if(setup){localStorage.setItem(CFG_KEY,JSON.stringify({user:u,passwordHash,createdAt:nowIso(),policy:'15+ upper lower number special'}));addLog('SUCCESS',u,'Strong security password created');overlay.remove();unlockPage();return}
+      if(passwordHash!==cfg.passwordHash){msg.textContent='Access denied. Attempt logged.';addLog('FAILED',u,'Wrong password');pin.value='';pin.focus();return}
       addLog('SUCCESS',u,'Login accepted');overlay.remove();unlockPage();
     }
     card.querySelector('#ai-sec-enter').onclick=submit;
