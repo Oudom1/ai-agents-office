@@ -8,3 +8,12 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
+    envVars:
+      - key: ADMIN_USERNAME
+        value: Admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_TTL_HOURS
+        value: 8
+      - key: ALLOWED_ORIGINS
+        value: https://oudom1.github.io
