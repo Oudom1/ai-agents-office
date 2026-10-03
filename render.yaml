@@ -15,5 +15,7 @@ services:
         sync: false
       - key: SESSION_TTL_HOURS
         value: 8
+      - key: LEONARDO_API_KEY
+        sync: false
       - key: ALLOWED_ORIGINS
         value: https://oudom1.github.io

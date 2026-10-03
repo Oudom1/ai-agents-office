@@ -9,6 +9,7 @@ const port = Number(process.env.PORT || 4000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
+const LEONARDO_API_KEY = process.env.LEONARDO_API_KEY || '';
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
   .split(',').map(v=>v.trim()).filter(Boolean);
@@ -75,6 +76,36 @@ function remainingLockSeconds(attempt:{count:number,windowStart:number}){
   return Math.ceil(remaining/1000);
 }
 
+
+function findGenerationId(value:any):string|undefined{
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const walk=(v:any):string|undefined=>{
+    if(!v) return undefined;
+    if(typeof v==='string' && uuid.test(v)) return v;
+    if(Array.isArray(v)){ for(const item of v){const found=walk(item);if(found)return found;} return undefined; }
+    if(typeof v==='object'){
+      for(const [k,val] of Object.entries(v)) if(/generation.?id|^id$/i.test(k) && typeof val==='string' && uuid.test(val)) return val;
+      for(const val of Object.values(v)){const found=walk(val);if(found)return found;}
+    }
+    return undefined;
+  };
+  return walk(value);
+}
+
+function findMp4Url(value:any):string|undefined{
+  const walk=(v:any):string|undefined=>{
+    if(!v) return undefined;
+    if(typeof v==='string' && /^https?:\/\//i.test(v) && v.includes('.mp4')) return v;
+    if(Array.isArray(v)){ for(const item of v){const found=walk(item);if(found)return found;} return undefined; }
+    if(typeof v==='object'){
+      for(const [k,val] of Object.entries(v)) if(/motionMP4URL|videoUrl|video_url/i.test(k) && typeof val==='string' && /^https?:\/\//i.test(val)) return val;
+      for(const val of Object.values(v)){const found=walk(val);if(found)return found;}
+    }
+    return undefined;
+  };
+  return walk(value);
+}
+
 app.set('trust proxy',1);
 app.use(cors({
   origin(origin,cb){
@@ -90,6 +121,7 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
+  videoProvider:{name:'Leonardo Free Trial',configured:Boolean(LEONARDO_API_KEY),freeOnly:true,paidFallback:false},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
@@ -251,6 +283,78 @@ app.get('/api/operations', requireAuth, (_req,res)=>{
     agents:agents.map(a=>({id:a.id,name:a.name,role:a.role,state:a.state,currentTask:(a as any).currentTask||null})),
     recentTasks:tasks.slice(0,20)
   });
+});
+
+
+app.get('/api/video/providers', requireAuth, (_req,res)=>{
+  res.json({freeOnly:true,paidFallback:false,providers:[
+    {id:'leonardo',name:'Leonardo Free Trial',configured:Boolean(LEONARDO_API_KEY),mode:'api',priority:1},
+    {id:'pixverse',name:'PixVerse Free',configured:false,mode:'manual',priority:2},
+    {id:'runway',name:'Runway Free/Trial',configured:false,mode:'manual',priority:3}
+  ]});
+});
+
+app.post('/api/video/generate', requireAuth, async (req:any,res)=>{
+  const prompt=String(req.body?.prompt||'').trim();
+  const taskId=String(req.body?.taskId||'').trim();
+  if(!prompt) return res.status(400).json({error:'prompt is required'});
+  if(!LEONARDO_API_KEY){
+    const task=tasks.find(t=>t.id===taskId);
+    if(task){(task as any).provider='Free Video Router';(task as any).resultMessage='Leonardo Free Trial API key is not configured';}
+    return res.status(503).json({error:'Leonardo Free Trial API key is not configured',freeOnly:true,paidFallback:false});
+  }
+  try{
+    const r=await fetch('https://cloud.leonardo.ai/api/rest/v1/generations-text-to-video',{
+      method:'POST',
+      headers:{accept:'application/json','content-type':'application/json',authorization:`Bearer ${LEONARDO_API_KEY}`},
+      body:JSON.stringify({prompt,resolution:'RESOLUTION_480',model:'MOTION2FAST',frameInterpolation:false,isPublic:false,promptEnhance:true})
+    });
+    const text=await r.text();
+    let data:any={};
+    try{data=text?JSON.parse(text):{};}catch{data={raw:text};}
+    if(!r.ok){
+      addSecurityLog(req,'FAILED',req.auth?.user||'Admin',`Leonardo generation rejected with HTTP ${r.status}; no paid fallback used`);
+      return res.status(r.status===402?429:502).json({error:'Free Leonardo generation unavailable',provider:'Leonardo Free Trial',freeOnly:true,paidFallback:false,providerStatus:r.status});
+    }
+    const generationId=findGenerationId(data);
+    if(!generationId) return res.status(502).json({error:'Leonardo accepted the request but no generation id was returned',provider:'Leonardo Free Trial'});
+    const task=tasks.find(t=>t.id===taskId);
+    if(task){(task as any).provider='Leonardo Free Trial';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Real video generation started with Leonardo Free Trial';}
+    addSecurityLog(req,'SUCCESS',req.auth?.user||'Admin',`Kai started Leonardo video generation ${generationId}`);
+    return res.status(202).json({ok:true,provider:'Leonardo Free Trial',generationId,freeOnly:true,paidFallback:false});
+  }catch(e){
+    console.error('Leonardo generation error',e);
+    return res.status(502).json({error:'Unable to reach Leonardo API',provider:'Leonardo Free Trial',freeOnly:true,paidFallback:false});
+  }
+});
+
+app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
+  if(!LEONARDO_API_KEY) return res.status(503).json({error:'Leonardo Free Trial API key is not configured'});
+  const generationId=String(req.params.generationId||'');
+  const taskId=String(req.query?.taskId||'');
+  try{
+    const r=await fetch(`https://cloud.leonardo.ai/api/rest/v1/generations/${encodeURIComponent(generationId)}`,{headers:{accept:'application/json',authorization:`Bearer ${LEONARDO_API_KEY}`}});
+    const text=await r.text();
+    let data:any={};
+    try{data=text?JSON.parse(text):{};}catch{data={raw:text};}
+    if(!r.ok) return res.status(502).json({error:'Unable to read Leonardo generation status',providerStatus:r.status});
+    const videoUrl=findMp4Url(data);
+    const rawStatus=String(data?.generations_by_pk?.status || data?.status || '').toUpperCase();
+    const failed=/FAIL|ERROR|CANCEL/.test(rawStatus);
+    const task=tasks.find(t=>t.id===taskId || (t as any).providerJobId===generationId);
+    if(videoUrl){
+      if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Leonardo Free Trial';(task as any).driveUrl=videoUrl;(task as any).resultMessage='Complete — real MP4 generated by Leonardo Free Trial';task.completedAt=new Date().toISOString();}
+      return res.json({ok:true,status:'done',provider:'Leonardo Free Trial',videoUrl,generationId});
+    }
+    if(failed){
+      if(task){(task as any).phase='provider-error';(task as any).resultMessage='Leonardo free generation failed; no paid fallback used';}
+      return res.json({ok:false,status:'failed',provider:'Leonardo Free Trial',generationId});
+    }
+    return res.json({ok:true,status:'generating',provider:'Leonardo Free Trial',generationId});
+  }catch(e){
+    console.error('Leonardo status error',e);
+    return res.status(502).json({error:'Unable to reach Leonardo API'});
+  }
 });
 
 app.post('/api/manager/call/:agentId', requireAuth, (req,res)=>{
