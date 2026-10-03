@@ -1,5 +1,13 @@
 document.getElementById('year').textContent = new Date().getFullYear();
 
+const profileCore = document.querySelector('.profile-core');
+if (profileCore) {
+  const roleLine = profileCore.querySelector('span');
+  const titleLine = profileCore.querySelector('b');
+  if (roleLine) roleLine.textContent = 'Senior System Administration';
+  if (titleLine) titleLine.textContent = '& Access Management Specialist';
+}
+
 const toggle = document.querySelector('.nav-toggle');
 const links = document.querySelector('.nav-links');
 
