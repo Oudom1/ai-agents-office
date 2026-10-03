@@ -51,7 +51,7 @@ const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
 const WORK_START_HOUR = 8;
 const WORK_END_HOUR = 18;
 const KAI_FREE_VIDEO_AVAILABLE = true;
-const KAI_PROVIDER_PENDING = 'Waiting for real free video provider integration. FREE ONLY is enabled; no paid fallback will be used.';
+const KAI_PROVIDER_PENDING = 'Free video router is waiting for a real provider integration. Route: PixVerse Free → Leonardo Free → Runway Free/Trial. FREE ONLY; no paid fallback.';
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 13, y: 18}, home: {x: 13, y: 18}},
@@ -69,7 +69,7 @@ const agentSkills: Record<string, string[]> = {
   security: ['Security', 'IAM', 'Access Review', 'Graylog', 'Compliance'],
   cloud: ['Cloud', 'Azure', 'Infrastructure', 'Networking', 'Deployment'],
   qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review'],
-  implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Google Drive', 'Automation'],
+  implement: ['Implementation', 'Video', 'Comedy Cartoon', 'PixVerse Free', 'Leonardo Free', 'Runway Free/Trial', 'Google Drive', 'Automation'],
   developer: ['React', 'TypeScript', 'Python', 'Java', 'GitHub', 'Portfolio']
 };
 
@@ -111,14 +111,14 @@ function makeItComedyPrompt() {
 function loadLocalTasks(): Task[] {
   try {
     const parsed: Task[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return parsed.map(t => t.agentId === 'implement' ? {...t, provider: 'PixVerse Free', blocker: undefined, durationSec: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t);
+    return parsed.map(t => t.agentId === 'implement' ? {...t, provider: 'Free Video Router', blocker: undefined, durationSec: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t);
   } catch { return []; }
 }
 
 function bestAgentForTask(title: string) {
   const q = title.toLowerCase();
   if (/portfolio|react|typescript|python|java|code|developer|github|website|web/.test(q)) return 'developer';
-  if (/video|cartoon|comedy|heygen|pixverse|reel|short|promo/.test(q)) return 'implement';
+  if (/video|cartoon|comedy|pixverse|leonardo|runway|reel|short|promo/.test(q)) return 'implement';
   if (/security|iam|access|graylog|audit|compliance|vulnerability/.test(q)) return 'security';
   if (/cloud|azure|network|infrastructure|deploy|server/.test(q)) return 'cloud';
   if (/test|uat|qa|quality|validate|verification/.test(q)) return 'qa';
@@ -145,7 +145,7 @@ function App() {
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data) && data.length) setTasks(data.map((t: Task) => t.agentId === 'implement' ? {...t, provider: 'PixVerse Free', blocker: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t));
+        if (Array.isArray(data) && data.length) setTasks(data.map((t: Task) => t.agentId === 'implement' ? {...t, provider: 'Free Video Router', blocker: undefined, phase: t.status === 'done' ? t.phase : 'queued'} : t));
       }
     } catch {}
   };
@@ -258,7 +258,7 @@ function App() {
     const id = crypto.randomUUID();
     const task: Task = {
       id, agentId, title, status: 'active', phase: kaiBlocked ? 'free-check' : 'queued', createdAt: new Date().toISOString(),
-      provider: isKai ? 'PixVerse Free' : isLeo ? 'Developer Workspace' : 'Internal Demo',
+      provider: isKai ? 'Free Video Router' : isLeo ? 'Developer Workspace' : 'Internal Demo',
       freeOnly: isKai,
       durationSec: isKai ? undefined : isLeo ? 45 : 12,
       recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined,
@@ -382,7 +382,7 @@ function App() {
     const id = crypto.randomUUID();
     const nextTask: Task = {
       id, agentId: 'implement', title: dueRecurring.title, status: 'active', phase: 'queued', createdAt: new Date().toISOString(),
-      provider: dueRecurring.provider ?? 'PixVerse Free', freeOnly: true, durationSec: dueRecurring.durationSec ?? 24,
+      provider: dueRecurring.provider ?? 'Free Video Router', freeOnly: true, durationSec: dueRecurring.durationSec ?? 24,
       recurringEveryHours: KAI_REFRESH_HOURS, sourceTaskId: dueRecurring.id
     };
     setTasks(prev => prev.map(t => t.id === dueRecurring.id ? {...t, nextRunAt: undefined} : t));
@@ -446,7 +446,7 @@ function App() {
             <button className="secondary" disabled={!taskTitle.trim()} onClick={alexAutoAssign}>Alex Auto-Assign by Skill</button>
           </div>
 
-          {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><p className="kai-note">Alex prepares comedy-cartoon video briefs for Kai. PixVerse Free is the selected UI route, but no real provider API is connected yet. Kai remains READY and tasks wait for provider integration. No task is marked complete until a real MP4 exists.</p><div className="skill-tags"><span>Comedy Cartoon</span><span>PixVerse Free</span><span>Google Drive</span><span>No Paid Fallback</span><span>Provider Pending</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
+          {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><p className="kai-note">Free routing order: PixVerse Free → Leonardo Free → Runway Free/Trial. No real provider API is connected yet, so this router is policy/UI only. Kai stays READY and no task is marked complete until a real MP4 exists.</p><div className="skill-tags"><span>PixVerse Free</span><span>Leonardo Free</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
           {selected === 'developer' && <div className="panel developer-panel"><div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div><p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p><div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span></div><label>Quick development tasks</label><div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
@@ -466,7 +466,7 @@ function ActiveTaskCard({task, agentName, now, onComplete, onBlocker}: {task: Ta
   const progress = getProgressPercent(task, now);
   const isKai = task.agentId === 'implement';
   const isLeo = task.agentId === 'developer';
-  return <div className="task-card"><div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{task.blocker ? 'Blocked' : friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">REAL FILE REQUIRED</span>}{isLeo && <span className="task-provider">DEV</span>}</div><b>{task.title}</b>{task.blocker && <p className="result-msg" style={{color:'#ff9eaa'}}>⚠ {task.blocker}</p>}<div className="task-timer"><div className="timer-bar"><i style={{width: `${task.blocker ? 8 : progress}%`}} /></div><div className="timer-line"><span>{task.blocker ? 'Blocked — waiting for Alex…' : isKai ? 'Waiting for real free provider integration…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.blocker ? 'BLOCKED' : isKai ? 'READY' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div></div><div className="task-bottom"><span>{timeAgo(task.createdAt)}</span><div style={{display:'flex',gap:'5px'}}><button onClick={onBlocker} style={{background:task.blocker?'#3c5b32':'#5a2832',borderColor:task.blocker?'#60834e':'#8f3d4b'}}>{task.blocker ? '✓ Clear Blocker' : isKai ? 'Provider Pending' : '⚠ Raise Blocker'}</button>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div></div></div>;
+  return <div className="task-card"><div className="task-top"><span className={`task-phase ${task.phase ?? 'queued'}`}>{task.blocker ? 'Blocked' : friendlyPhase(task.phase)}</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}{isKai && <span className="task-provider">REAL FILE REQUIRED</span>}{isLeo && <span className="task-provider">DEV</span>}</div><b>{task.title}</b>{task.blocker && <p className="result-msg" style={{color:'#ff9eaa'}}>⚠ {task.blocker}</p>}<div className="task-timer"><div className="timer-bar"><i style={{width: `${task.blocker ? 8 : progress}%`}} /></div><div className="timer-line"><span>{task.blocker ? 'Blocked — waiting for Alex…' : isKai ? 'Free router waiting for provider integration…' : task.phase === 'working' ? (isLeo ? 'Coding…' : 'Generating…') : task.phase === 'preparing' ? 'Preparing…' : 'Loading…'}</span><b>{task.blocker ? 'BLOCKED' : isKai ? 'READY' : task.phase === 'working' ? `${formatDuration(remaining)} left` : 'In progress'}</b></div></div><div className="task-bottom"><span>{timeAgo(task.createdAt)}</span><div style={{display:'flex',gap:'5px'}}><button onClick={onBlocker} style={{background:task.blocker?'#3c5b32':'#5a2832',borderColor:task.blocker?'#60834e':'#8f3d4b'}}>{task.blocker ? '✓ Clear Blocker' : isKai ? 'Provider Pending' : '⚠ Raise Blocker'}</button>{!isKai && <button onClick={onComplete}>✓ Complete</button>}</div></div></div>;
 }
 
 function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) { return <div className="result-card"><div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div><b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p><div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>{task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}{task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}</div>; }
@@ -482,6 +482,6 @@ function Room({x, y, w, h, title, cls}: {x: number; y: number; w: number; h: num
 function Desk({x, y}: {x: number; y: number}) { return <div className="desk" style={{left: `${x}%`, top: `${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>; }
 function TaskLights({completed}: {completed: number}) { const pct = Math.round((completed / TASK_TARGET) * 100); return <div className="task-progress"><div className="task-lights" aria-label={`${completed} of ${TASK_TARGET} tasks completed`}>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task <b>{pct}%</b></span></div>; }
 function MiniProgress({completed}: {completed: number}) { return <div className="mini-progress"><div>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task</span></div>; }
-function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? (agent.id === 'implement' ? 'Waiting for free provider integration' : 'Blocked — need Alex') : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
+function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? (agent.id === 'implement' ? 'Free router waiting for provider integration' : 'Blocked — need Alex') : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
