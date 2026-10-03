@@ -262,7 +262,7 @@ function App() {
       freeOnly: isKai,
       durationSec: isKai ? undefined : isLeo ? 45 : 12,
       recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined,
-      blocker: kaiBlocked ? KAI_PROVIDER_BLOCKER : undefined
+      blocker: undefined
     };
     setTasks(prev => [task, ...prev]);
     if (kaiBlocked) {
