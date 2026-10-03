@@ -3,11 +3,12 @@ import {createRoot} from 'react-dom/client';
 import './styles.css';
 
 type Agent={id:string;name:string;role:string;state:string;position:{x:number;y:number};home:{x:number;y:number};destination?:{x:number;y:number};currentTask?:string};
-type Task={id:string;title:string;agentId:string;status:string;createdAt:string;phase?:string};
+type Task={id:string;title:string;agentId:string;status:string;createdAt:string;phase?:string;provider?:string;freeOnly?:boolean};
 
 const API=(import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
 const TASK_TARGET=12;
-const STORAGE_KEY='ai-agents-office-tasks-v2';
+const STORAGE_KEY='ai-agents-office-tasks-v3';
+const KAI_PROVIDER='HeyGen Free';
 const fallbackAgents:Agent[]=[
 {id:'manager',name:'Alex',role:'Manager',state:'working',position:{x:18,y:18},home:{x:18,y:18}},
 {id:'sysadmin',name:'Sam',role:'Senior System Administrator',state:'working',position:{x:20,y:43},home:{x:20,y:43}},
@@ -49,7 +50,7 @@ function App(){
  const startLocalTaskMotion=(agentId:string,title:string,taskId:string)=>{
    const a=agents.find(x=>x.id===agentId);if(!a)return;
    updateLocal(agentId,{state:'assigned-task',currentTask:title,destination:{x:48,y:18}});
-   patchTask(taskId,{phase:'received'});
+   patchTask(taskId,{phase:agentId==='implement'?'free-check':'received'});
    window.setTimeout(()=>{updateLocal(agentId,{state:'preparing',currentTask:title,destination:{x:48,y:24}});patchTask(taskId,{phase:'preparing'})},900);
    window.setTimeout(()=>{updateLocal(agentId,{state:'working-task',currentTask:title,destination:a.home});patchTask(taskId,{phase:'working'})},2100);
  };
@@ -57,17 +58,18 @@ function App(){
  const assign=async()=>{
    if(!taskTitle.trim())return;
    const title=taskTitle.trim();
+   const isKai=selected==='implement';
    try{
-     const r=await fetch(`${API}/tasks`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agentId:selected,title})});
+     const r=await fetch(`${API}/tasks`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agentId:selected,title,provider:isKai?KAI_PROVIDER:undefined,freeOnly:isKai})});
      if(!r.ok)throw 0;
-     setTaskTitle('');setNotice('Task assigned');await refresh();
+     setTaskTitle('');setNotice(isKai?'Kai queued a FREE-only video task':'Task assigned');await refresh();
    }catch{
      const id=crypto.randomUUID();
-     const t:Task={id,agentId:selected,title,status:'active',phase:'queued',createdAt:new Date().toISOString()};
+     const t:Task={id,agentId:selected,title,status:'active',phase:'queued',createdAt:new Date().toISOString(),provider:isKai?KAI_PROVIDER:undefined,freeOnly:isKai};
      setTasks(prev=>[t,...prev]);
      startLocalTaskMotion(selected,title,id);
      setTaskTitle('');
-     setNotice(`${agents.find(a=>a.id===selected)?.name??'Agent'} started the task`);
+     setNotice(isKai?'Kai will use HeyGen Free only — no paid fallback':`${agents.find(a=>a.id===selected)?.name??'Agent'} started the task`);
    }
  };
 
@@ -102,17 +104,17 @@ function App(){
     </div>
    </section>
    <aside>
-    <div className="panel manager-control"><h2>Manager Control</h2><label>Agent</label><select value={selected} onChange={e=>setSelected(e.target.value)}>{workerAgents.map(a=><option key={a.id} value={a.id}>{a.role}</option>)}</select><button onClick={call}>Call to Manager</button><div className="row"><button className="secondary" onClick={()=>state('working')}>Work</button><button className="secondary" onClick={()=>state('break')}>Break</button><button className="secondary" onClick={()=>state('lunch')}>Lunch</button></div><div className="task-compose"><input placeholder="Assign a task..." value={taskTitle} onChange={e=>setTaskTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')assign()}}/><span>{taskTitle.length}/240</span></div><button className="assign-btn" disabled={!taskTitle.trim()} onClick={assign}>Assign Task</button></div>
-    {selected==='implement'&&<div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-FIRST</span></div><p className="kai-note">Pick a template or write your own prompt. Kai prepares the job first, then the video provider can be connected to execute it.</p><div className="skill-tags"><span>Runway</span><span>OpenArt</span><span>HeyGen</span><span>Adobe</span><span>Google Drive</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t=><button key={t.name} className="template-btn" onClick={()=>setTaskTitle(t.prompt)}>{t.name}</button>)}</div></div>}
-    <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a=><div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span>{a.id==='implement'&&<span className="kai-skill-line">Video AI • Adobe • Drive</span>}<MiniProgress completed={completedByAgent[a.id]??0}/></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
-    <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2>{doneCount>0&&<button className="text-btn" onClick={clearDone}>Clear done</button>}</div>{activeTasks.length===0?<p className="muted">No active tasks</p>:activeTasks.map(t=><div className="task-card" key={t.id}><div className="task-top"><span className={`task-phase ${t.phase??'queued'}`}>{friendlyPhase(t.phase)}</span><span className="task-agent">{agents.find(a=>a.id===t.agentId)?.name}</span></div><b>{t.title}</b><div className="task-bottom"><span>{timeAgo(t.createdAt)}</span><button onClick={()=>completeTask(t)}>✓ Complete</button></div></div>)}</div>
+    <div className="panel manager-control"><h2>Manager Control</h2><label>Agent</label><select value={selected} onChange={e=>setSelected(e.target.value)}>{workerAgents.map(a=><option key={a.id} value={a.id}>{a.role}</option>)}</select><button onClick={call}>Call to Manager</button><div className="row"><button className="secondary" onClick={()=>state('working')}>Work</button><button className="secondary" onClick={()=>state('break')}>Break</button><button className="secondary" onClick={()=>state('lunch')}>Lunch</button></div><div className="task-compose"><input placeholder={selected==='implement'?'Ask Kai to generate a FREE video...':'Assign a task...'} value={taskTitle} onChange={e=>setTaskTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')assign()}}/><span>{taskTitle.length}/240</span></div><button className="assign-btn" disabled={!taskTitle.trim()} onClick={assign}>{selected==='implement'?'Ask Kai to Generate':'Assign Task'}</button></div>
+    {selected==='implement'&&<div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE ONLY</span></div><div className="free-provider"><div><span className="provider-dot"/><b>HeyGen Free</b></div><em>LOCKED PROVIDER</em></div><p className="kai-note">Kai is restricted to free video generation only. No Runway, paid credits, or automatic paid fallback. If the free quota is unavailable, the task must stop instead of charging.</p><div className="free-rule"><span>✓ Free provider only</span><span>✓ No paid fallback</span><span>✓ Stop when quota ends</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t=><button key={t.name} className="template-btn" onClick={()=>setTaskTitle(t.prompt)}>{t.name}</button>)}</div></div>}
+    <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a=><div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span>{a.id==='implement'&&<span className="kai-skill-line">FREE VIDEO • HeyGen • Drive</span>}<MiniProgress completed={completedByAgent[a.id]??0}/></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
+    <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2>{doneCount>0&&<button className="text-btn" onClick={clearDone}>Clear done</button>}</div>{activeTasks.length===0?<p className="muted">No active tasks</p>:activeTasks.map(t=><div className="task-card" key={t.id}><div className="task-top"><span className={`task-phase ${t.phase??'queued'}`}>{friendlyPhase(t.phase)}</span><span className="task-agent">{agents.find(a=>a.id===t.agentId)?.name}</span></div>{t.provider&&<div className="task-provider">{t.provider}{t.freeOnly?' • FREE ONLY':''}</div>}<b>{t.title}</b><div className="task-bottom"><span>{timeAgo(t.createdAt)}</span><button onClick={()=>completeTask(t)}>✓ Complete</button></div></div>)}</div>
    </aside>
   </main>
  </div>
 }
 
 function friendlyState(state:string){if(state==='assigned-task')return 'assigned';if(state==='working-task')return 'working';return state}
-function friendlyPhase(phase?:string){if(phase==='received')return 'Received';if(phase==='preparing')return 'Preparing';if(phase==='working')return 'Working';return 'Queued'}
+function friendlyPhase(phase?:string){if(phase==='free-check')return 'Free Check';if(phase==='received')return 'Received';if(phase==='preparing')return 'Preparing';if(phase==='working')return 'Working';return 'Queued'}
 function timeAgo(value:string){const s=Math.max(0,Math.floor((Date.now()-new Date(value).getTime())/1000));if(s<60)return `${s}s ago`;const m=Math.floor(s/60);if(m<60)return `${m}m ago`;return `${Math.floor(m/60)}h ago`}
 function Room({x,y,w,h,title,cls}:{x:number;y:number;w:number;h:number;title:string;cls:string}){return <div className={`room ${cls}`} style={{left:`${x}%`,top:`${y}%`,width:`${w}%`,height:`${h}%`}}><span>{title}</span></div>}
 function Desk({x,y}:{x:number;y:number}){return <div className="desk" style={{left:`${x}%`,top:`${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>}
