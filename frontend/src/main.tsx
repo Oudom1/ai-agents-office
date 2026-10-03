@@ -38,6 +38,7 @@ const STORAGE_KEY = 'ai-agents-office-tasks-v3';
 const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/folders/1SDKs0stvoeIkYIhEcP5znRq7-tSyaEpl';
 const KAI_REFRESH_HOURS = 4;
 const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
+const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 18, y: 18}, home: {x: 18, y: 18}},
@@ -50,10 +51,31 @@ const fallbackAgents: Agent[] = [
 
 const kaiVideoTemplates = [
   {name: 'Funny Cartoon', prompt: 'Create a 10-second funny cartoon video. A cute office worker spills coffee on the desk, looks shocked, then pretends nothing happened while coworkers stare. Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous tone, smooth animation, vertical 9:16.'},
-  {name: 'IT Comedy', prompt: 'Create a 10-second funny cartoon video of an IT administrator confidently fixing a computer, accidentally unplugging the wrong cable, then freezing while every monitor goes dark. Bright 2D cartoon style, exaggerated reaction, playful comedy, vertical 9:16.'},
+  {name: 'IT Comedy', prompt: 'Create a fresh 10-second funny IT cartoon video with a new office technology mishap. Bright colorful 2D cartoon style, exaggerated reactions, playful comedy, smooth animation, vertical 9:16.'},
   {name: 'Security Joke', prompt: 'Create a 10-second funny cartoon video of a cybersecurity analyst celebrating that the system is secure, then 99 warning alerts suddenly appear on the monitor. Funny timing, exaggerated facial expression, colorful cartoon office, vertical 9:16.'},
   {name: 'Short Promo', prompt: 'Create a 10-second vertical animated promo video with energetic motion, clean modern graphics, short punchy scenes, upbeat mood, and a strong final hero shot. Format 9:16 for Shorts and Reels.'}
 ];
+
+const itComedyIdeas = [
+  'An IT administrator confidently fixes a computer, accidentally unplugs the wrong cable, and every monitor in the office goes dark while he freezes and slowly looks around.',
+  'An IT administrator proudly announces that the printer is fixed, presses Print, and the printer suddenly launches a giant stream of paper across the whole office.',
+  'An IT administrator resets a user password, celebrates too early, then realizes he accidentally locked his own admin account and stares at the login screen in disbelief.',
+  'An IT administrator restarts the Wi-Fi router to fix one user, then the entire office loses Wi-Fi and everyone slowly turns toward him at the same time.',
+  'An IT administrator says the server reboot will take only five seconds, clicks Restart, and a giant loading spinner appears while the whole office waits silently.',
+  'An IT administrator fixes one small software error, gives a thumbs-up, then three new warning windows immediately pop up behind him one after another.',
+  'An IT administrator plugs in a network cable with confidence, gets a success light, then notices he connected the cable back into the same switch port loop.',
+  'An IT administrator tells everyone not to panic during an outage, then his own laptop shows a huge red error message and he quietly closes the lid.',
+  'An IT administrator cleans up old files to free storage, empties the recycle bin, then suddenly remembers the important file he was supposed to keep.',
+  'An IT administrator fixes a frozen laptop by pressing one key, looks like a hero for two seconds, then the laptop starts installing 47 updates.'
+];
+
+function makeItComedyPrompt() {
+  let last = Number(localStorage.getItem(IT_COMEDY_LAST_KEY) ?? '-1');
+  let index = Math.floor(Math.random() * itComedyIdeas.length);
+  if (itComedyIdeas.length > 1 && index === last) index = (index + 1) % itComedyIdeas.length;
+  localStorage.setItem(IT_COMEDY_LAST_KEY, String(index));
+  return `Create a 10-second funny cartoon video. ${itComedyIdeas[index]} Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous timing, smooth animation, vertical 9:16.`;
+}
 
 function loadLocalTasks(): Task[] {
   try {
@@ -156,6 +178,28 @@ function App() {
       updateLocal(agentId, {state: 'working-task', currentTask: title, destination: a.home});
       patchTask(taskId, {phase: 'working', startedAt: new Date().toISOString()});
     }, 2800);
+  };
+
+  const launchKaiQuickTemplate = (name: string, fallbackPrompt: string) => {
+    const title = name === 'IT Comedy' ? makeItComedyPrompt() : fallbackPrompt;
+    const id = crypto.randomUUID();
+    const task: Task = {
+      id,
+      agentId: 'implement',
+      title,
+      status: 'active',
+      phase: 'queued',
+      createdAt: new Date().toISOString(),
+      provider: 'HeyGen Free',
+      freeOnly: true,
+      durationSec: 24,
+      recurringEveryHours: KAI_REFRESH_HOURS
+    };
+    setSelected('implement');
+    setTasks(prev => [task, ...prev]);
+    startLocalTaskMotion('implement', title, id);
+    setTaskTitle('');
+    setNotice(name === 'IT Comedy' ? 'Kai received a fresh IT Comedy idea and started a new video task' : `Kai started ${name}`);
   };
 
   const assign = async () => {
@@ -349,7 +393,7 @@ function App() {
                 <span>FREE-ONLY</span>
               </div>
               <p className="kai-note">
-                Alex delegates video work directly to Kai. Kai keeps the task in the dashboard and automatically refreshes the same content every 4 hours. Free-only routing stays enabled, with results linked to Kai Video Workspace in Google Drive.
+                Click a quick template to send a new video task directly to Kai. IT Comedy creates a fresh IT scenario on every click and keeps the 4-hour refresh cycle enabled.
               </p>
               <div className="skill-tags">
                 <span>HeyGen Free</span>
@@ -360,7 +404,7 @@ function App() {
               <label>Quick video templates</label>
               <div className="template-grid">
                 {kaiVideoTemplates.map(t => (
-                  <button key={t.name} className="template-btn" onClick={() => setTaskTitle(t.prompt)}>{t.name}</button>
+                  <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>
                 ))}
               </div>
             </div>
@@ -588,7 +632,7 @@ function AgentSprite({agent, completed}: {agent: Agent; completed: number}) {
       : agent.currentTask ?? agent.state;
 
   return (
-    <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}>
+    <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}>
       <div className="bubble">{bubble}</div>
       <div className={`avatar ${agent.id}`}>{initial}</div>
       <small>{agent.name}</small>
