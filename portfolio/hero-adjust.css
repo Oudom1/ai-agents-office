@@ -1,0 +1,5 @@
+.hero{padding-bottom:180px}
+.hero-visual{min-height:700px}
+.code-card{bottom:-125px}
+@media(max-width:1000px){.hero{padding-bottom:150px}.hero-visual{min-height:620px}.code-card{bottom:-95px}}
+@media(max-width:700px){.hero{padding-bottom:120px}.hero-visual{min-height:500px}.code-card{bottom:-70px}}
