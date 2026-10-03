@@ -68,7 +68,7 @@ const agentSkills: Record<string, string[]> = {
   sysadmin: ['Windows', 'Active Directory', 'Microsoft 365', 'Troubleshooting', 'PowerShell'],
   security: ['Security', 'IAM', 'Access Review', 'Graylog', 'Compliance'],
   cloud: ['Cloud', 'Azure', 'Infrastructure', 'Networking', 'Deployment'],
-  qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review'],
+  qa: ['Q/A', 'Testing', 'Validation', 'UAT', 'Quality Review', 'Typing Tool QA', 'API Testing', 'Regression Testing', 'Responsive Testing'],
   implement: ['Implementation', 'Video', 'Comedy Cartoon', 'Leonardo Free Trial API', 'PixVerse Free', 'Runway Free/Trial', 'Google Drive', 'Automation'],
   developer: ['React', 'TypeScript', 'Python', 'Java', 'GitHub', 'Portfolio']
 };
