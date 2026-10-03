@@ -19,7 +19,7 @@
 
   function buildBrief(seed) {
     const clean = (seed || ideas[Math.floor(Math.random() * ideas.length)]).trim().slice(0, 82);
-    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. HeyGen FREE ONLY; no paid fallback; upload final MP4 to Drive.`.slice(0, 240);
+    return `Alex brief → Kai: Create a 10-second funny comedy cartoon video about ${clean}. Bright colorful 2D cartoon, exaggerated reactions, playful timing, vertical 9:16. FREE ONLY; no paid fallback; upload real final MP4 to Drive.`.slice(0, 240);
   }
 
   function showPrepToast(message) {
@@ -29,7 +29,7 @@
       toast.id = 'alex-kai-prep-toast';
       Object.assign(toast.style, {
         position: 'fixed', right: '22px', top: '74px', zIndex: '9999',
-        maxWidth: '340px', padding: '11px 13px', borderRadius: '10px',
+        maxWidth: '360px', padding: '11px 13px', borderRadius: '10px',
         background: '#132a3d', border: '1px solid #3b769a', color: '#bfeaff',
         font: '700 11px Inter,system-ui,sans-serif', boxShadow: '0 14px 34px rgba(0,0,0,.35)'
       });
@@ -37,7 +37,7 @@
     }
     toast.textContent = message;
     clearTimeout(window.__alexKaiToastTimer);
-    window.__alexKaiToastTimer = setTimeout(() => toast?.remove(), 3200);
+    window.__alexKaiToastTimer = setTimeout(() => toast?.remove(), 4200);
   }
 
   function selectKai() {
@@ -50,20 +50,14 @@
     return true;
   }
 
-  function prepareAndAssignComedy() {
+  function prepareBlockedComedy() {
     selectKai();
     setTimeout(() => {
       const input = document.querySelector('.manager-control .task-compose input');
-      const assign = document.querySelector('.manager-control .assign-btn');
-      if (!(input instanceof HTMLInputElement) || !(assign instanceof HTMLButtonElement)) return;
+      if (!(input instanceof HTMLInputElement)) return;
       const brief = buildBrief('a fresh funny IT office mishap selected by Alex');
       setReactInput(input, brief);
-      showPrepToast('Alex is preparing a Comedy Cartoon task for Kai…');
-      setTimeout(() => {
-        assign.setAttribute(PREPARED, '1');
-        assign.click();
-        showPrepToast('Alex prepared and assigned the Comedy Cartoon task to Kai.');
-      }, 1000);
+      showPrepToast('Alex prepared Kai’s Comedy Cartoon brief, but generation is BLOCKED: no free video provider is currently available.');
     }, 150);
   }
 
@@ -74,11 +68,15 @@
     const card = document.createElement('div');
     card.id = 'alex-kai-board-card';
     card.innerHTML = `
-      <div style="font-size:8px;font-weight:900;letter-spacing:.8px;color:#75e9ff">ALEX → KAI</div>
-      <div style="font-size:11px;font-weight:900;color:#fff;margin:4px 0 2px">Comedy Cartoon</div>
-      <div style="font-size:7px;line-height:1.35;color:#a9bfd2">Alex prepares a fresh funny IT cartoon brief, then assigns it to Kai for video generation.</div>
-      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #277653;border-radius:999px;color:#80f3b7;background:#0d3023">READY</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • 9:16</span></div>
-      <button id="alex-kai-board-run" style="margin-top:6px;width:100%;padding:5px 6px;border-radius:6px;border:1px solid #2b6f8d;background:#123e55;color:#d9f5ff;font-size:8px;font-weight:800;cursor:pointer">Prepare & Assign to Kai</button>`;
+      <div style="font-size:8px;font-weight:900;letter-spacing:.8px;color:#75e9ff">ALEX → KAI • FREE VIDEO ROUTER</div>
+      <div style="font-size:11px;font-weight:900;color:#fff;margin:4px 0 4px">Comedy Cartoon</div>
+      <div style="display:grid;gap:3px;font-size:7px;line-height:1.35">
+        <div style="color:#ff9eaa">● HeyGen — BLOCKED • Avatar IV monthly free limit reached</div>
+        <div style="color:#ffd37a">● OpenArt — BLOCKED • 40 credits available, cheapest video needs 50</div>
+        <div style="color:#ff9eaa">● Runway — BLOCKED • free workspace has no video models</div>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:6px;align-items:center"><span style="font-size:7px;padding:2px 4px;border:1px solid #8f3d4b;border-radius:999px;color:#ffb4bd;background:#341820">BLOCKED</span><span style="font-size:7px;color:#85a4bb">FREE ONLY • NO PAID FALLBACK</span></div>
+      <button id="alex-kai-board-run" style="margin-top:6px;width:100%;padding:5px 6px;border-radius:6px;border:1px solid #705229;background:#302715;color:#ffe0a0;font-size:8px;font-weight:800;cursor:pointer">Prepare Brief While Waiting</button>`;
     Object.assign(card.style, {
       position: 'absolute', left: '26.2%', top: '8.2%', width: '19.5%', minHeight: '15%', zIndex: '9',
       padding: '8px', borderRadius: '8px', border: '1px solid #2a6a86',
@@ -86,11 +84,26 @@
       boxShadow: '0 8px 20px rgba(0,0,0,.28)', fontFamily: 'Inter,system-ui,sans-serif'
     });
     office.appendChild(card);
-    card.querySelector('#alex-kai-board-run')?.addEventListener('click', prepareAndAssignComedy);
+    card.querySelector('#alex-kai-board-run')?.addEventListener('click', prepareBlockedComedy);
+  }
+
+  function ensureProviderBanner() {
+    const kaiPanel = document.querySelector('.kai-panel');
+    if (!(kaiPanel instanceof HTMLElement) || document.getElementById('kai-provider-status')) return;
+    const box = document.createElement('div');
+    box.id = 'kai-provider-status';
+    box.innerHTML = `<b style="color:#ff9eaa">VIDEO GENERATION BLOCKED</b><br><span>HeyGen free limit reached • OpenArt 40/50 credits • Runway free video unavailable</span><br><span style="color:#8ba6ba">Kai will not mark a video complete until a real MP4 exists.</span>`;
+    Object.assign(box.style, {
+      margin: '8px 0', padding: '8px', borderRadius: '8px', border: '1px solid #743d48',
+      background: '#2c1720', color: '#ffd2d7', fontSize: '9px', lineHeight: '1.45'
+    });
+    const note = kaiPanel.querySelector('.kai-note');
+    note?.insertAdjacentElement('afterend', box);
   }
 
   function ensureButton() {
     ensureTaskBoardCard();
+    ensureProviderBanner();
     const control = document.querySelector('.manager-control');
     const assign = control?.querySelector('.assign-btn');
     const input = control?.querySelector('.task-compose input');
@@ -108,43 +121,30 @@
     prep = document.createElement('button');
     prep.id = 'alex-prepare-kai';
     prep.className = 'secondary';
-    prep.textContent = 'Alex Prepare Comedy Cartoon for Kai';
-    prep.setAttribute('title', 'Alex prepares the comedy cartoon video brief first, then assigns it to Kai');
+    prep.textContent = 'Alex Prepare Comedy Brief (Provider Blocked)';
+    prep.setAttribute('title', 'Alex can prepare the brief, but free video generation is currently blocked');
     assign.insertAdjacentElement('afterend', prep);
 
     prep.addEventListener('click', () => {
       const seed = input.value.trim() || 'a fresh funny IT office mishap selected by Alex';
       const brief = buildBrief(seed);
       setReactInput(input, brief);
-      showPrepToast('Alex is preparing the Comedy Cartoon brief for Kai…');
-      prep.disabled = true;
-      prep.textContent = 'Alex preparing…';
-
-      setTimeout(() => {
-        assign.setAttribute(PREPARED, '1');
-        assign.click();
-        showPrepToast('Alex prepared the brief and assigned it to Kai.');
-        prep?.remove();
-      }, 1200);
+      showPrepToast('Alex prepared the Comedy Cartoon brief. Kai is waiting for a free video provider.');
     });
   }
 
   document.addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest('.kai-panel .template-btn') : null;
     if (!(button instanceof HTMLButtonElement)) return;
-    if (button.getAttribute(PREPARED) === '1') {
-      button.removeAttribute(PREPARED);
-      return;
-    }
     event.preventDefault();
     event.stopImmediatePropagation();
     const name = button.textContent?.trim() || 'video task';
-    showPrepToast(`Alex is preparing the ${name} brief for Kai…`);
-    setTimeout(() => {
-      showPrepToast(`Alex finished preparation and assigned ${name} to Kai.`);
-      button.setAttribute(PREPARED, '1');
-      button.click();
-    }, 1000);
+    const input = document.querySelector('.manager-control .task-compose input');
+    if (input instanceof HTMLInputElement) {
+      const seed = name === 'IT Comedy' ? ideas[Math.floor(Math.random() * ideas.length)] : `${name} comedy cartoon concept`;
+      setReactInput(input, buildBrief(seed));
+    }
+    showPrepToast(`Alex prepared ${name} for Kai, but real video generation is blocked until a free provider becomes available.`);
   }, true);
 
   const observer = new MutationObserver(ensureButton);
