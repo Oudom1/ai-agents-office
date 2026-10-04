@@ -3,7 +3,7 @@ export const loungePoint = { x: 13, y: 72 };
 export const cafeteriaPoint = { x: 75, y: 73 };
 
 export const agents = [
-  { id:'manager', name:'Alex', role:'Manager', state:'working', position:{x:18,y:18}, home:{x:18,y:18} },
+  { id:'manager', name:'Alex', role:'Manager', state:'working-task', position:{x:18,y:18}, home:{x:18,y:18}, currentTask:'Coordinate marketplace delivery, blockers and cross-team handoffs' },
   { id:'sysadmin', name:'Sam', role:'Senior System Administrator', state:'working-task', position:{x:20,y:43}, home:{x:20,y:43}, currentTask:'Design marketplace access control using RBAC first and ABAC where needed' },
   { id:'security', name:'Mina', role:'Senior Security', state:'working-task', position:{x:42,y:43}, home:{x:42,y:43}, currentTask:'Review authentication, authorization and monitoring security controls' },
   { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working-task', position:{x:65,y:43}, home:{x:65,y:43}, currentTask:'Evaluate free deployment platforms for frontend, API and Java backend' },
@@ -13,6 +13,16 @@ export const agents = [
 ];
 
 const assignedAt = Date.now();
+
+const alexTitles = [
+  'Coordinate marketplace delivery, blockers and cross-team handoffs',
+  'Review blockers raised by Leo, Sam, Lina, Mina and Noah and assign the right owner',
+  'Prioritize critical defects and unblock dependencies between development, QA, security and deployment',
+  'Review release readiness status across Leo, Sam, Lina, Mina and Noah',
+  'Escalate unresolved technical blockers for further review when Alex cannot resolve them',
+  'Approve final production go-live after QA, security and deployment checks pass'
+];
+
 const leoTitles = [
   'Build React marketplace UI matching the approved reference design',
   'Create product detail page and related asset experience',
@@ -96,12 +106,13 @@ const mkTasks = (prefix:string, agentId:string, provider:string, titles:string[]
   resultMessage: index === 0 ? `${agentId} is actively working on this project responsibility.` : `Assigned and queued. Continue automatically after the previous task is completed.`
 }));
 
+const alexTasks = mkTasks('alex-marketplace','manager','Management Workspace',alexTitles,-50000,1800);
 const leoTasks = mkTasks('leo-marketplace','developer','Developer Workspace',leoTitles,0,3600);
 const samTasks = mkTasks('sam-marketplace','sysadmin','Access Control Workspace',samTitles,50000,2400);
 const linaTasks = mkTasks('lina-marketplace','qa','QA Workspace',linaTitles,100000,2400);
 const minaTasks = mkTasks('mina-marketplace','security','Security Review Workspace',minaTitles,150000,2700);
 const noahTasks = mkTasks('noah-marketplace','cloud','Cloud / CI-CD Workspace',noahTitles,200000,2700);
 
-export const tasks:any[] = [...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks];
+export const tasks:any[] = [...alexTasks, ...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks];
 
 export const startedAt = new Date().toISOString();
