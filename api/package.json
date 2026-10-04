@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prebuild": "node scripts/patch-multiuser-auth.mjs",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js"
   },
