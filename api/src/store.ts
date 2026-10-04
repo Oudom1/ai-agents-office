@@ -8,7 +8,7 @@ export const agents = [
   { id:'security', name:'Mina', role:'Senior Security', state:'working', position:{x:42,y:43}, home:{x:42,y:43} },
   { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working', position:{x:65,y:43}, home:{x:65,y:43} },
   { id:'qa', name:'Lina', role:'Senior Q/A', state:'working', position:{x:33,y:59}, home:{x:33,y:59} },
-  { id:'implement', name:'Kai', role:'Senior Implement', state:'blocked', position:{x:58,y:59}, home:{x:58,y:59} },
+  { id:'implement', name:'Kai', role:'Senior Implement', state:'working', position:{x:58,y:59}, home:{x:58,y:59} },
   { id:'developer', name:'Leo', role:'Senior Developer', state:'working', position:{x:75,y:59}, home:{x:75,y:59} }
 ];
 
