@@ -20,6 +20,6 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add api/src/index.ts api/package.json api/package-lock.json
+          git add api/src/index.ts api/package.json
           git commit -m "Improve Kai video frame duration and add free voice narration"
           git push
