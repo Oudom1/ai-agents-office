@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
-import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, persistSecurityLog } from './auth-store.js';
+import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog } from './auth-store.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -214,7 +214,7 @@ app.post('/api/auth/login',async(req,res)=>{
     const issuedAt=Number(payload.issuedAt||0);
     if(challenge!==h.challenge || Math.abs(Date.now()-issuedAt)>HANDSHAKE_TTL_MS) throw new Error('challenge verification failed');
 
-    const okUser=secureEqual(username,ADMIN_USERNAME);
+    const okUser=databaseConfigured() ? Boolean(username) : secureEqual(username,ADMIN_USERNAME);
     const okPass=await verifyAdminPassword(username,password,ADMIN_USERNAME,ADMIN_PASSWORD);
     if(!okUser || !okPass){
       attempt.count += 1;
@@ -232,9 +232,9 @@ app.post('/api/auth/login',async(req,res)=>{
   loginAttempts.delete(ip);
   const token=randomBytes(32).toString('hex');
   const expiresAt=Date.now()+SESSION_TTL_HOURS*60*60*1000;
-  sessions.set(token,{user:ADMIN_USERNAME,expiresAt});
-  addSecurityLog(req,'SUCCESS',ADMIN_USERNAME,'Login accepted via ECDH key exchange + AES-GCM verification');
-  res.json({ok:true,token,user:ADMIN_USERNAME,expiresAt:new Date(expiresAt).toISOString()});
+  sessions.set(token,{user:username,expiresAt});
+  addSecurityLog(req,'SUCCESS',username,'Login accepted via ECDH key exchange + AES-GCM verification');
+  res.json({ok:true,token,user:username,expiresAt:new Date(expiresAt).toISOString()});
 });
 
 app.post('/api/auth/reset-password',async(req,res)=>{
@@ -281,6 +281,31 @@ app.post('/api/auth/logout',requireAuth,(req:any,res)=>{
   addSecurityLog(req,'SUCCESS',req.auth.user,'Logged out');
   sessions.delete(token);
   res.json({ok:true});
+});
+
+app.post('/api/admin/users',requireAuth,async(req:any,res)=>{
+  if(req.auth.user!==ADMIN_USERNAME) return res.status(403).json({error:'Admin account required'});
+  if(!databaseConfigured()) return res.status(503).json({error:'Database is not configured'});
+  const adminPassword=String(req.body?.adminPassword||'');
+  const firstName=String(req.body?.firstName||'').trim();
+  const lastName=String(req.body?.lastName||'').trim();
+  const password=String(req.body?.password||'');
+  const clean=(v:string)=>v.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g,'');
+  const first=clean(firstName), last=clean(lastName);
+  if(!first || !last) return res.status(400).json({error:'First name and last name are required'});
+  const username=`${first}.${last}`;
+  if(!/^[a-z0-9]+\.[a-z0-9]+$/.test(username) || username.length>80) return res.status(400).json({error:'Invalid username format'});
+  if(!strongPassword(password)) return res.status(400).json({error:'Password must be 15+ characters with uppercase, lowercase, number and special character.'});
+  const adminOk=await verifyAdminPassword(ADMIN_USERNAME,adminPassword,ADMIN_USERNAME,ADMIN_PASSWORD);
+  if(!adminOk){addSecurityLog(req,'FAILED',req.auth.user,`Admin verification failed while creating ${username}`);return res.status(401).json({error:'Admin password is incorrect'});}
+  try{
+    await createAppUser(username,password);
+    addSecurityLog(req,'SUCCESS',req.auth.user,`Created user ${username}`);
+    return res.json({ok:true,username,role:'user',message:'User created successfully'});
+  }catch(e:any){
+    if(String(e?.message)==='USER_EXISTS') return res.status(409).json({error:'User already exists'});
+    console.error('User creation failed',e); return res.status(500).json({error:'Unable to create user'});
+  }
 });
 
 app.get('/api/agents', requireAuth, (_req,res)=>res.json(agents));
