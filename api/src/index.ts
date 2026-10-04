@@ -11,6 +11,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
 const HF_SPACE_ID = process.env.HF_SPACE_ID || 'Lightricks/ltx-video-distilled';
 const HF_SPACE_HOST = process.env.HF_SPACE_HOST || HF_SPACE_ID.toLowerCase().replace(/_/g,'-').replace(/\//g,'-') + '.hf.space';
+const HF_TOKEN = process.env.HF_TOKEN || '';
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
   .split(',').map(v=>v.trim()).filter(Boolean);
@@ -122,7 +123,7 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
-  videoProvider:{name:'Hugging Face ZeroGPU Wan',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID},
+  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous'},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
@@ -290,6 +291,9 @@ app.get('/api/operations', requireAuth, (_req,res)=>{
 const videoJobs = new Map<string,{status:'generating'|'done'|'failed';provider:string;videoUrl?:string;error?:string;taskId?:string}>();
 
 function hfSpaceBase(){ return `https://${HF_SPACE_HOST}`; }
+function hfHeaders(extra:Record<string,string>={}){
+  return {...extra,accept:'application/json',...(HF_TOKEN?{authorization:`Bearer ${HF_TOKEN}`}:{})};
+}
 
 function normalizeVideoUrl(value:any):string|undefined{
   const base=hfSpaceBase();
@@ -356,7 +360,7 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string,attempt=1){
   const job=videoJobs.get(jobId); if(!job) return;
   const task=tasks.find(t=>t.id===taskId);
   try{
-    const infoRes=await fetch(`${hfSpaceBase()}/gradio_api/info`,{headers:{accept:'application/json'}});
+    const infoRes=await fetch(`${hfSpaceBase()}/gradio_api/info`,{headers:hfHeaders()});
     if(!infoRes.ok) throw new Error(`Space info HTTP ${infoRes.status}`);
     const info:any=await infoRes.json();
     const endpoints=info?.named_endpoints || {};
@@ -367,13 +371,13 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string,attempt=1){
     const apiName=endpoint.replace(/^\//,'');
     const data=buildHfInputs(meta?.parameters||[],prompt);
     const call=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}`,{
-      method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify({data})
+      method:'POST',headers:hfHeaders({'content-type':'application/json'}),body:JSON.stringify({data})
     });
     if(!call.ok) throw new Error(`ZeroGPU queue HTTP ${call.status}`);
     const queued:any=await call.json();
     const eventId=String(queued?.event_id||'');
     if(!eventId) throw new Error('ZeroGPU did not return an event id');
-    const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`);
+    const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`,{headers:hfHeaders()});
     if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
     const text=await stream.text();
     const providerError=providerErrorFromSse(text);
@@ -390,21 +394,23 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string,attempt=1){
   }catch(e:any){
     const err=String(e?.message||e||'ZeroGPU generation failed');
     console.error(`Hugging Face ZeroGPU attempt ${attempt} error`,err);
-    if(attempt < 3){
+    const quotaExceeded=/quota|exceeded|overquota/i.test(err);
+    if(!quotaExceeded && attempt < 3){
       job.status='generating'; job.error=undefined;
       if(task){(task as any).phase='generating';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Free provider busy — automatic retry ${attempt + 1}/3...`;delete (task as any).blocker;}
       await new Promise(resolve=>setTimeout(resolve,attempt*2500));
       return runHfVideo(jobId,prompt,taskId,attempt+1);
     }
     job.status='failed'; job.error=err;
-    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`ZeroGPU unavailable after 3 attempts: ${job.error}`;(task as any).blocker=`Kai video provider error after 3 attempts: ${job.error}`;}
+    const finalMsg=quotaExceeded ? `Free ZeroGPU quota unavailable: ${err}` : `ZeroGPU unavailable after 3 attempts: ${err}`;
+    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=finalMsg;(task as any).blocker=`Kai video provider error: ${finalMsg}`;}
     console.error('Hugging Face ZeroGPU generation failed after retries',err);
   }
 }
 
 app.get('/api/video/providers', requireAuth, (_req,res)=>{
   res.json({freeOnly:true,paidFallback:false,bestEffort:true,providers:[
-    {id:'hf-zerogpu-ltx',name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,mode:'api',priority:1,space:HF_SPACE_ID,note:'Free best-effort; queue/availability can change'},
+    {id:'hf-zerogpu-ltx',name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,mode:'api',priority:1,space:HF_SPACE_ID,note:HF_TOKEN?'Free-account ZeroGPU quota via HF token':'Anonymous ZeroGPU quota; add HF_TOKEN for larger free quota'},
     {id:'pixverse',name:'PixVerse Free',configured:false,mode:'manual',priority:2},
     {id:'runway',name:'Runway Free/Trial',configured:false,mode:'manual',priority:3}
   ]});
