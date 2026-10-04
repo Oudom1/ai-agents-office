@@ -343,8 +343,10 @@ function providerErrorFromSse(text:string):string|undefined{
       const raw=line.slice(5).trim();
       try{
         const payload=JSON.parse(raw);
-        return String(payload?.error || payload?.title || 'Provider returned an error');
-      }catch{return raw || 'Provider returned an error';}
+        const detail = payload?.error?.message || payload?.error?.detail || payload?.error || payload?.message || payload?.detail || payload?.title;
+        if (typeof detail === 'string' && detail.trim()) return detail.trim();
+        return 'Hugging Face ZeroGPU returned an unspecified provider error. The free GPU/Space may be temporarily unavailable; retry shortly.';
+      }catch{return raw || 'Hugging Face ZeroGPU returned an unspecified provider error. Retry shortly.';}
     }
   }
   return undefined;
@@ -375,7 +377,7 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
     if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
     const text=await stream.text();
     const providerError=providerErrorFromSse(text);
-    if(providerError) throw new Error(providerError);
+    if(providerError){ console.error('ZeroGPU provider detail:', providerError); throw new Error(providerError); }
     let videoUrl:string|undefined;
     for(const line of text.split('\n')){
       if(!line.startsWith('data:')) continue;
