@@ -1,0 +1,25 @@
+name: Apply Kai Frame Voice
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python scripts/patch_kai_frame_voice.py
+      - run: cd api && npm install && npm run build
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/src/index.ts api/package.json api/package-lock.json
+          git commit -m "Improve Kai video frame duration and add free voice narration"
+          git push
