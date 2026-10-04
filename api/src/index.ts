@@ -137,7 +137,7 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
-  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8,frame:'512x288 16:9',voice:'Edge neural TTS (free best-effort)'},
+  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8,defaultSeconds:12,talkingDefaultSeconds:20,frame:'512x288 16:9',voice:'Edge neural TTS (free best-effort)'},
   googleDrive:{configured:driveConfigured(),folderId:GOOGLE_DRIVE_FOLDER_ID},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
@@ -339,7 +339,8 @@ function driveConfigured(){ return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SEC
 function requestedVideoSeconds(prompt:string){
   const m=prompt.match(/(\d+)\s*(?:minute|minutes|min)\b/i); if(m) return Math.max(1,Math.min(60,Number(m[1])*60));
   const sec=prompt.match(/(\d+)\s*(?:second|seconds|sec|secs)\b/i); if(sec) return Math.max(1,Math.min(60,Number(sec[1])));
-  return 8;
+  if(/\b(?:talk|talking|conversation|dialogue|speak|speaking|discuss|chat)\b/i.test(prompt)) return 20;
+  return 12;
 }
 async function getGoogleAccessToken(){
   const body=new URLSearchParams({client_id:GOOGLE_CLIENT_ID,client_secret:GOOGLE_CLIENT_SECRET,refresh_token:GOOGLE_REFRESH_TOKEN,grant_type:'refresh_token'});
@@ -383,6 +384,8 @@ async function normalizeSceneClip(input:string,output:string,seconds:number){
 function narrationFromPrompt(prompt:string){
   if(/\b(?:no voice|silent|mute|without (?:voice|audio|narration))\b/i.test(prompt)) return '';
   let text=prompt.replace(/\b(?:create|make|generate|produce)\b/ig,'').replace(/\b\d+\s*(?:minutes?|mins?|seconds?|secs?)\b/ig,'').replace(/\b(?:video|cartoon|animation|clip)\b/ig,'').replace(/\s+/g,' ').trim();
+  const wantsTalking=/\b(?:talk|talking|conversation|dialogue|speak|speaking|discuss|chat)\b/i.test(prompt);
+  if(wantsTalking && text) text=`Hello! ${text}. Sure, let's talk about it together. That sounds good. Let's continue.`;
   if(!text) text='Here is Kai with your animated story.';
   return text.slice(0,600);
 }
@@ -479,7 +482,9 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
     for(let i=0;i<sceneCount;i++){
       const sceneSec=Math.max(1,Math.min(8,remaining)); remaining-=sceneSec;
       if(task){(task as any).phase='generating';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Generating scene ${i+1}/${sceneCount} (${sceneSec}s target). Kai stays working until the final MP4 is ready.`;delete (task as any).blocker;}
-      const scenePrompt=sceneCount>1?`${prompt}\nScene ${i+1} of ${sceneCount}. Keep the same characters, visual style and story continuity. Continue naturally and last about ${sceneSec} seconds.`:prompt;
+      const wantsTalking=/\b(?:talk|talking|conversation|dialogue|speak|speaking|discuss|chat)\b/i.test(prompt);
+      const talkingDirection=wantsTalking?' The characters must visibly speak to each other with natural mouth movement, alternating conversational gestures, eye contact, and reaction shots.':' ';
+      const scenePrompt=sceneCount>1?`${prompt}\nScene ${i+1} of ${sceneCount}. Keep the same characters, clothing, visual style and story continuity.${talkingDirection} Continue naturally and last about ${sceneSec} seconds.`:`${prompt}${talkingDirection}`;
       const clipUrl=await generateHfClipWithRetry(scenePrompt,sceneSec); const rawClipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}-raw.mp4`); const clipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}.mp4`); await downloadClip(clipUrl,rawClipPath); await normalizeSceneClip(rawClipPath,clipPath,sceneSec); clips.push(clipPath);
     }
     if(task){(task as any).phase='merging';(task as any).resultMessage=`All ${sceneCount} scene(s) generated — merging into one MP4...`;}
