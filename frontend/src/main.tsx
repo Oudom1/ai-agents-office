@@ -52,7 +52,7 @@ const IT_COMEDY_LAST_KEY = 'kai-last-it-comedy';
 const WORK_START_HOUR = 8;
 const WORK_END_HOUR = 18;
 const KAI_FREE_VIDEO_AVAILABLE = true;
-const KAI_PROVIDER_PENDING = 'Free video router: Hugging Face ZeroGPU LTX Video Fast → PixVerse Free/manual → Runway Free/manual. FREE ONLY; no paid fallback.';
+const KAI_PROVIDER_PENDING = 'No active provider job. Start or retry Kai to use Hugging Face ZeroGPU LTX Video Fast.';
 
 const fallbackAgents: Agent[] = [
   {id: 'manager', name: 'Alex', role: 'Manager', state: 'working', position: {x: 13, y: 18}, home: {x: 13, y: 18}},
@@ -111,9 +111,10 @@ function makeItComedyPrompt() {
 
 function normalizeKaiTask(t: Task): Task {
   if (t.agentId !== 'implement') return t;
-  const hasRealProviderState = Boolean(t.providerJobId) || ['starting','generating','completed','provider-error'].includes(String(t.phase || '')) || t.provider === 'Hugging Face ZeroGPU LTX Video Fast';
+  const phase=String(t.phase || '');
+  const hasRealProviderState = Boolean(t.providerJobId) || ['starting','generating','completed','provider-error'].includes(phase) || t.provider === 'Hugging Face ZeroGPU LTX Video Fast';
   if (hasRealProviderState) return {...t, freeOnly: true};
-  return {...t, provider: t.provider || 'Free Video Router', freeOnly: true, phase: t.phase || 'queued'};
+  return {...t, provider:'Hugging Face ZeroGPU LTX Video Fast', freeOnly:true, phase:'provider-error', blocker:t.blocker || 'Legacy Free Video Router task detected. It is not actively generating. Retry Kai to start LTX.', resultMessage:t.resultMessage || 'Waiting stopped — no provider job was started for this old task.'};
 }
 
 function loadLocalTasks(): Task[] {
@@ -265,12 +266,13 @@ function App() {
     const kaiBlocked = isKai && !KAI_FREE_VIDEO_AVAILABLE;
     const id = crypto.randomUUID();
     const task: Task = {
-      id, agentId, title, status: 'active', phase: kaiBlocked ? 'free-check' : 'queued', createdAt: new Date().toISOString(),
-      provider: isKai ? 'Free Video Router' : isLeo ? 'Developer Workspace' : 'Internal Demo',
+      id, agentId, title, status: 'active', phase: isKai ? 'provider-error' : (kaiBlocked ? 'free-check' : 'queued'), createdAt: new Date().toISOString(),
+      provider: isKai ? 'Hugging Face ZeroGPU LTX Video Fast' : isLeo ? 'Developer Workspace' : 'Internal Demo',
       freeOnly: isKai,
       durationSec: isKai ? undefined : isLeo ? 45 : 12,
       recurringEveryHours: isKai ? KAI_REFRESH_HOURS : undefined,
-      blocker: undefined
+      blocker: isKai ? 'Video backend request did not start. Retry Kai to start LTX.' : undefined,
+      resultMessage: isKai ? 'No active provider job. Retry generation.' : undefined
     };
     setTasks(prev => [task, ...prev]);
     if (kaiBlocked) {
@@ -366,9 +368,9 @@ function App() {
     const isLeo = task.agentId === 'developer';
 
     if (isKai && !task.driveUrl) {
-      patchTask(task.id, {status: 'active', phase: task.providerJobId ? 'generating' : 'queued', blocker: undefined, completedAt: undefined, resultMessage: task.providerJobId ? 'Leonardo is still generating the real MP4...' : KAI_PROVIDER_PENDING, nextRunAt: undefined});
+      patchTask(task.id, {status:'active',phase:task.providerJobId ? 'generating' : 'provider-error',blocker:task.providerJobId ? undefined : 'No active provider job. Retry Kai to start LTX.',completedAt:undefined,resultMessage:task.providerJobId ? 'Hugging Face ZeroGPU LTX Video Fast is generating the real MP4...' : KAI_PROVIDER_PENDING,nextRunAt:undefined});
       updateLocal('implement', {state: 'working', currentTask: task.title});
-      setNotice(task.providerJobId ? 'Kai is still generating the real MP4.' : 'Kai task is waiting for a real free video provider — no fake completion.');
+      setNotice(task.providerJobId ? 'Kai is still generating the real MP4.' : 'Kai is not generating. Retry the task to start LTX.');
       return;
     }
 
