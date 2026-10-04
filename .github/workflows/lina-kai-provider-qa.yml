@@ -1,0 +1,37 @@
+name: Lina Kai Provider QA
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test public API health
+        run: |
+          set -e
+          echo "=== HEALTH ==="
+          curl -sS --fail https://ai-agents-office-api.onrender.com/api/health | tee health.json
+          python - <<'PY'
+          import json
+          d=json.load(open('health.json'))
+          assert d.get('ok') is True, d
+          vp=d.get('videoProvider') or {}
+          print('videoProvider=', vp)
+          print('configured=', vp.get('configured'))
+          print('freeOnly=', vp.get('freeOnly'))
+          print('paidFallback=', vp.get('paidFallback'))
+          if not vp.get('configured'):
+              raise SystemExit('FAIL: Leonardo API key is not configured on the live backend')
+          if vp.get('freeOnly') is not True or vp.get('paidFallback') is not False:
+              raise SystemExit('FAIL: FREE ONLY policy mismatch')
+          print('PASS: live backend health and provider configuration look correct')
+          PY
+
+      - name: Confirm video route is protected
+        run: |
+          code=$(curl -sS -o unauth.json -w "%{http_code}" -X POST https://ai-agents-office-api.onrender.com/api/video/generate -H 'Content-Type: application/json' -d '{"prompt":"Lina QA dry run"}')
+          echo "unauthenticated generate status=$code"
+          cat unauth.json
+          test "$code" = "401"
