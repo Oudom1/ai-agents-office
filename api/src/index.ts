@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import { randomBytes, timingSafeEqual, createECDH, hkdfSync, createDecipheriv } from 'node:crypto';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
 import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, persistSecurityLog } from './auth-store.js';
 
@@ -12,6 +17,13 @@ const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
 const HF_SPACE_ID = process.env.HF_SPACE_ID || 'Lightricks/ltx-video-distilled';
 const HF_SPACE_HOST = process.env.HF_SPACE_HOST || HF_SPACE_ID.toLowerCase().replace(/_/g,'-').replace(/\//g,'-') + '.hf.space';
 const HF_TOKEN = process.env.HF_TOKEN || '';
+const require = createRequire(import.meta.url);
+const ffmpegPath = require('ffmpeg-static') as string | null;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN || '';
+const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '1SDKs0stvoeIkYIhEcP5znRq7-tSyaEpl';
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/,'');
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
   .split(',').map(v=>v.trim()).filter(Boolean);
@@ -123,7 +135,8 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
-  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous'},
+  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8},
+  googleDrive:{configured:driveConfigured(),folderId:GOOGLE_DRIVE_FOLDER_ID},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
@@ -288,11 +301,53 @@ app.get('/api/operations', requireAuth, (_req,res)=>{
 });
 
 
-const videoJobs = new Map<string,{status:'generating'|'done'|'failed';provider:string;videoUrl?:string;error?:string;taskId?:string}>();
+const videoJobs = new Map<string,{status:'generating'|'done'|'failed';provider:string;videoUrl?:string;driveUrl?:string;localPath?:string;error?:string;taskId?:string}>();
 
 function hfSpaceBase(){ return `https://${HF_SPACE_HOST}`; }
 function hfHeaders(extra:Record<string,string>={}){
   return {...extra,accept:'application/json',...(HF_TOKEN?{authorization:`Bearer ${HF_TOKEN}`}:{})};
+}
+
+function driveConfigured(){ return Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REFRESH_TOKEN && GOOGLE_DRIVE_FOLDER_ID); }
+function requestedVideoSeconds(prompt:string){
+  const m=prompt.match(/(\d+)\s*(?:minute|minutes|min)\b/i); if(m) return Math.max(1,Math.min(60,Number(m[1])*60));
+  const sec=prompt.match(/(\d+)\s*(?:second|seconds|sec|secs)\b/i); if(sec) return Math.max(1,Math.min(60,Number(sec[1])));
+  return 8;
+}
+async function getGoogleAccessToken(){
+  const body=new URLSearchParams({client_id:GOOGLE_CLIENT_ID,client_secret:GOOGLE_CLIENT_SECRET,refresh_token:GOOGLE_REFRESH_TOKEN,grant_type:'refresh_token'});
+  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body});
+  if(!r.ok) throw new Error(`Google OAuth HTTP ${r.status}: ${await r.text()}`);
+  const j:any=await r.json(); if(!j.access_token) throw new Error('Google OAuth did not return an access token'); return String(j.access_token);
+}
+async function uploadToGoogleDrive(filePath:string,fileName:string){
+  if(!driveConfigured()) return undefined;
+  const accessToken=await getGoogleAccessToken();
+  const init=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink,webContentLink',{method:'POST',headers:{authorization:`Bearer ${accessToken}`,'content-type':'application/json; charset=UTF-8','x-upload-content-type':'video/mp4'},body:JSON.stringify({name:fileName,mimeType:'video/mp4',parents:[GOOGLE_DRIVE_FOLDER_ID]})});
+  if(!init.ok) throw new Error(`Google Drive initiate upload HTTP ${init.status}: ${await init.text()}`);
+  const uploadUrl=init.headers.get('location'); if(!uploadUrl) throw new Error('Google Drive did not return a resumable upload URL');
+  const bytes=await readFile(filePath);
+  const put=await fetch(uploadUrl,{method:'PUT',headers:{authorization:`Bearer ${accessToken}`,'content-type':'video/mp4','content-length':String(bytes.length)},body:bytes});
+  if(!put.ok) throw new Error(`Google Drive upload HTTP ${put.status}: ${await put.text()}`);
+  const file:any=await put.json(); return {id:String(file.id),webViewLink:String(file.webViewLink||`https://drive.google.com/file/d/${file.id}/view`)};
+}
+async function downloadClip(url:string,filePath:string){
+  const r=await fetch(url,{headers:url.includes(HF_SPACE_HOST)?hfHeaders():{}}); if(!r.ok) throw new Error(`Video download HTTP ${r.status}`);
+  await writeFile(filePath,Buffer.from(await r.arrayBuffer()));
+}
+async function runFfmpeg(args:string[]){
+  if(!ffmpegPath) throw new Error('FFmpeg binary unavailable');
+  await new Promise<void>((resolve,reject)=>{
+    const p:any=spawn(ffmpegPath,args,{stdio:['ignore','ignore','pipe']}); let err='';
+    p.stderr?.on('data',(d:Buffer)=>{err+=String(d); if(err.length>12000) err=err.slice(-12000);});
+    p.on('error',reject); p.on('close',(code:number|null)=>code===0?resolve():reject(new Error(`FFmpeg failed (${code}): ${err.slice(-2000)}`)));
+  });
+}
+async function mergeClips(files:string[],output:string){
+  if(files.length===1){ await writeFile(output,await readFile(files[0])); return; }
+  const listPath=join(tmpdir(),`kai-list-${randomBytes(8).toString('hex')}.txt`); await writeFile(listPath,files.map(f=>`file '${f}'`).join('\n'));
+  try{ await runFfmpeg(['-y','-f','concat','-safe','0','-i',listPath,'-c','copy',output]); }
+  catch{ await runFfmpeg(['-y','-f','concat','-safe','0','-i',listPath,'-c:v','libx264','-preset','ultrafast','-c:a','aac','-movflags','+faststart',output]); }
 }
 
 function normalizeVideoUrl(value:any):string|undefined{
@@ -317,7 +372,7 @@ function normalizeVideoUrl(value:any):string|undefined{
   return walk(value);
 }
 
-function buildHfInputs(parameters:any[],prompt:string){
+function buildHfInputs(parameters:any[],prompt:string,clipSeconds=8){
   return (parameters||[]).map((p:any)=>{
     const name=String(p?.parameter_name||'').toLowerCase();
     const label=String(p?.label||name||p?.name||'').toLowerCase();
@@ -333,7 +388,7 @@ function buildHfInputs(parameters:any[],prompt:string){
     if(label.includes('height')) return 512;
     if(label.includes('width')) return 288;
     if(label.includes('guidance') || label.includes('cfg')) return def ?? 1;
-    if(label.includes('duration') || label.includes('seconds')) return 2;
+    if(label.includes('duration') || label.includes('seconds')) return Math.max(1,Math.min(8,clipSeconds));
     return def ?? example ?? null;
   });
 }
@@ -356,63 +411,47 @@ function providerErrorFromSse(text:string):string|undefined{
   return undefined;
 }
 
-async function runHfVideo(jobId:string,prompt:string,taskId:string,attempt=1){
-  const job=videoJobs.get(jobId); if(!job) return;
-  const task=tasks.find(t=>t.id===taskId);
+async function generateHfClip(prompt:string,clipSeconds:number){
+  const infoRes=await fetch(`${hfSpaceBase()}/gradio_api/info`,{headers:hfHeaders()}); if(!infoRes.ok) throw new Error(`Space info HTTP ${infoRes.status}`);
+  const info:any=await infoRes.json(); const entries=Object.entries(info?.named_endpoints||{}) as [string,any][];
+  const chosen=entries.find(([k])=>/text.*video|t2v/i.test(k)) || entries.find(([k])=>/generate.*video|video.*generate|generate|predict/i.test(k)); if(!chosen) throw new Error('No usable Gradio text-to-video endpoint found');
+  const [endpoint,meta]=chosen; const apiName=endpoint.replace(/^\//,''); const data=buildHfInputs(meta?.parameters||[],prompt,clipSeconds);
+  const call=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}`,{method:'POST',headers:hfHeaders({'content-type':'application/json'}),body:JSON.stringify({data})}); if(!call.ok) throw new Error(`ZeroGPU queue HTTP ${call.status}`);
+  const queued:any=await call.json(); const eventId=String(queued?.event_id||''); if(!eventId) throw new Error('ZeroGPU did not return an event id');
+  const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`,{headers:hfHeaders()}); if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
+  const text=await stream.text(); const providerError=providerErrorFromSse(text); if(providerError) throw new Error(providerError);
+  let videoUrl:string|undefined; for(const line of text.split('\n')){ if(!line.startsWith('data:')) continue; try{videoUrl=normalizeVideoUrl(JSON.parse(line.slice(5).trim()))||videoUrl;}catch{} }
+  if(!videoUrl) throw new Error('ZeroGPU completed without a real MP4 URL'); return videoUrl;
+}
+async function generateHfClipWithRetry(prompt:string,clipSeconds:number){
+  let last='generation failed'; for(let attempt=1;attempt<=3;attempt++){ try{return await generateHfClip(prompt,clipSeconds);}catch(e:any){last=String(e?.message||e||last); if(/quota|exceeded|overquota/i.test(last)||attempt===3) break; await new Promise(r=>setTimeout(r,attempt*2500));} } throw new Error(last);
+}
+async function runHfVideo(jobId:string,prompt:string,taskId:string){
+  const job=videoJobs.get(jobId); if(!job) return; const task=tasks.find(t=>t.id===taskId); const kai=agents.find(a=>a.id==='implement');
   try{
-    const infoRes=await fetch(`${hfSpaceBase()}/gradio_api/info`,{headers:hfHeaders()});
-    if(!infoRes.ok) throw new Error(`Space info HTTP ${infoRes.status}`);
-    const info:any=await infoRes.json();
-    const endpoints=info?.named_endpoints || {};
-    const entries=Object.entries(endpoints) as [string,any][];
-    const chosen=entries.find(([k])=>/text.*video|t2v/i.test(k)) || entries.find(([k])=>/generate.*video|video.*generate|generate|predict/i.test(k));
-    if(!chosen) throw new Error('No usable Gradio text-to-video endpoint found');
-    const [endpoint,meta]=chosen;
-    const apiName=endpoint.replace(/^\//,'');
-    const data=buildHfInputs(meta?.parameters||[],prompt);
-    const call=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}`,{
-      method:'POST',headers:hfHeaders({'content-type':'application/json'}),body:JSON.stringify({data})
-    });
-    if(!call.ok) throw new Error(`ZeroGPU queue HTTP ${call.status}`);
-    const queued:any=await call.json();
-    const eventId=String(queued?.event_id||'');
-    if(!eventId) throw new Error('ZeroGPU did not return an event id');
-    const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`,{headers:hfHeaders()});
-    if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
-    const text=await stream.text();
-    const providerError=providerErrorFromSse(text);
-    if(providerError){ console.error('ZeroGPU provider detail:', providerError); throw new Error(providerError); }
-    let videoUrl:string|undefined;
-    for(const line of text.split('\n')){
-      if(!line.startsWith('data:')) continue;
-      const raw=line.slice(5).trim();
-      try{ const payload=JSON.parse(raw); videoUrl=normalizeVideoUrl(payload) || videoUrl; }catch{}
+    const targetSeconds=requestedVideoSeconds(prompt); const sceneCount=Math.max(1,Math.ceil(targetSeconds/8)); const workDir=join(tmpdir(),`kai-${jobId}`); await mkdir(workDir,{recursive:true}); const clips:string[]=[]; let remaining=targetSeconds;
+    for(let i=0;i<sceneCount;i++){
+      const sceneSec=Math.max(1,Math.min(8,remaining)); remaining-=sceneSec;
+      if(task){(task as any).phase='generating';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Generating scene ${i+1}/${sceneCount} (${sceneSec}s target). Kai stays working until the final MP4 is ready.`;delete (task as any).blocker;}
+      const scenePrompt=sceneCount>1?`${prompt}\nScene ${i+1} of ${sceneCount}. Keep the same characters, visual style and story continuity. Continue naturally and last about ${sceneSec} seconds.`:prompt;
+      const clipUrl=await generateHfClipWithRetry(scenePrompt,sceneSec); const clipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}.mp4`); await downloadClip(clipUrl,clipPath); clips.push(clipPath);
     }
-    if(!videoUrl) throw new Error('ZeroGPU completed without a real MP4 URL');
-    job.videoUrl=videoUrl;
-    job.status='done';
-    const completedAt=new Date();
-    const startedMs=task?.startedAt ? new Date((task as any).startedAt).getTime() : (task?.createdAt ? new Date(task.createdAt).getTime() : completedAt.getTime());
-    const actualSec=Math.max(0,Math.floor((completedAt.getTime()-startedMs)/1000));
-    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).driveUrl=videoUrl;(task as any).durationSec=actualSec;(task as any).resultMessage=`Complete — real MP4 generated after ${actualSec}s of actual provider processing.`;delete (task as any).blocker;task.completedAt=completedAt.toISOString();}
-    const kai=agents.find(a=>a.id==='implement');
+    if(task){(task as any).phase='merging';(task as any).resultMessage=`All ${sceneCount} scene(s) generated — merging into one MP4...`;}
+    const finalPath=join(workDir,'final.mp4'); await mergeClips(clips,finalPath); job.localPath=finalPath; job.videoUrl=`${PUBLIC_BASE_URL}/api/video/files/${jobId}`;
+    let driveUrl:string|undefined;
+    if(driveConfigured()){
+      if(task){(task as any).phase='uploading';(task as any).resultMessage='Final MP4 ready — uploading to Kai Video Workspace in Google Drive...';}
+      const uploaded=await uploadToGoogleDrive(finalPath,`Kai-${new Date().toISOString().replace(/[:.]/g,'-')}-${jobId.slice(0,8)}.mp4`); driveUrl=uploaded?.webViewLink; job.driveUrl=driveUrl;
+    }
+    job.status='done'; const completedAt=new Date(); const startedMs=task?.startedAt?new Date((task as any).startedAt).getTime():completedAt.getTime(); const actualSec=Math.max(0,Math.floor((completedAt.getTime()-startedMs)/1000));
+    if(task){task.status='done';(task as any).phase='completed';(task as any).videoUrl=job.videoUrl;(task as any).driveUrl=driveUrl;(task as any).durationSec=targetSeconds;(task as any).generationTimeSec=actualSec;(task as any).resultMessage=driveUrl?`Complete — ${targetSeconds}s target video assembled from ${sceneCount} scene(s), generated in ${actualSec}s and uploaded to Google Drive.`:`Complete — ${targetSeconds}s target video assembled from ${sceneCount} scene(s) in ${actualSec}s. Google Drive upload is not configured yet.`;delete (task as any).blocker;task.completedAt=completedAt.toISOString();}
     if(kai){(kai as any).state='working';(kai as any).currentTask=undefined;(kai as any).destination=(kai as any).home;}
   }catch(e:any){
-    const err=String(e?.message||e||'ZeroGPU generation failed');
-    console.error(`Hugging Face ZeroGPU attempt ${attempt} error`,err);
-    const quotaExceeded=/quota|exceeded|overquota/i.test(err);
-    if(!quotaExceeded && attempt < 3){
-      job.status='generating'; job.error=undefined;
-      if(task){(task as any).phase='generating';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Free provider busy — automatic retry ${attempt + 1}/3...`;delete (task as any).blocker;}
-      await new Promise(resolve=>setTimeout(resolve,attempt*2500));
-      return runHfVideo(jobId,prompt,taskId,attempt+1);
-    }
-    job.status='failed'; job.error=err;
-    const finalMsg=quotaExceeded ? `Free ZeroGPU quota unavailable: ${err}` : `ZeroGPU unavailable after 3 attempts: ${err}`;
-    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=finalMsg;(task as any).blocker=`Kai video provider error: ${finalMsg}`;}
-    console.error('Hugging Face ZeroGPU generation failed after retries',err);
+    const err=String(e?.message||e||'ZeroGPU generation failed'); job.status='failed';job.error=err; const finalMsg=/quota|exceeded|overquota/i.test(err)?`Free ZeroGPU quota unavailable: ${err}`:`Kai pipeline failed: ${err}`;
+    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=finalMsg;(task as any).blocker=`Kai video provider error: ${finalMsg}`;} console.error('Kai video pipeline failed',err);
   }
 }
+app.get('/api/video/files/:generationId',async(req,res)=>{const job=videoJobs.get(String(req.params.generationId||''));if(!job?.localPath)return res.status(404).send('Video file not found');res.setHeader('Cache-Control','private, max-age=3600');return res.sendFile(job.localPath);});
 
 app.get('/api/video/providers', requireAuth, (_req,res)=>{
   res.json({freeOnly:true,paidFallback:false,bestEffort:true,providers:[
@@ -439,7 +478,7 @@ app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
   const generationId=String(req.params.generationId||'');
   const job=videoJobs.get(generationId);
   if(!job) return res.status(404).json({error:'Generation job not found'});
-  if(job.status==='done' && job.videoUrl) return res.json({ok:true,status:'done',provider:job.provider,videoUrl:job.videoUrl,generationId});
+  if(job.status==='done' && job.videoUrl) return res.json({ok:true,status:'done',provider:job.provider,videoUrl:job.videoUrl,driveUrl:job.driveUrl,generationId});
   if(job.status==='failed') return res.json({ok:false,status:'failed',provider:job.provider,generationId,error:job.error});
   const task=job.taskId ? tasks.find(t=>t.id===job.taskId) : undefined;
   const startedMs=task?.startedAt ? new Date((task as any).startedAt).getTime() : Date.now();
