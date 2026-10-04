@@ -1,0 +1,61 @@
+name: Lina ZeroGPU Diagnostic
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect live Hugging Face Gradio video response
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re, urllib.request, urllib.error
+          base='https://numanajmal0-wan-video-api.hf.space'
+          def get(url, data=None):
+              req=urllib.request.Request(url,data=data,headers={'Accept':'application/json','Content-Type':'application/json'} if data is not None else {'Accept':'application/json'})
+              with urllib.request.urlopen(req, timeout=90) as r:
+                  return r.read().decode('utf-8','replace')
+          info=json.loads(get(base+'/gradio_api/info'))
+          eps=info.get('named_endpoints',{})
+          print('ENDPOINTS=', list(eps.keys()))
+          chosen=None
+          for k,v in eps.items():
+              if re.search(r'generate.*video|video.*generate|text.*video|t2v',k,re.I): chosen=(k,v); break
+          if not chosen:
+              for k,v in eps.items():
+                  if re.search(r'generate|predict',k,re.I): chosen=(k,v); break
+          if not chosen: raise SystemExit('No endpoint')
+          endpoint,meta=chosen
+          print('CHOSEN=', endpoint)
+          print('PARAMS=', json.dumps(meta.get('parameters',[]), indent=2)[:10000])
+          prompt='A simple 3-second colorful cartoon of a smiling IT administrator waving, vertical video.'
+          vals=[]
+          for p in meta.get('parameters',[]):
+              label=str(p.get('label') or p.get('parameter_name') or p.get('name') or '').lower()
+              example=p.get('example_input', p.get('default', p.get('value')))
+              if 'negative' in label: vals.append(example if example is not None else '')
+              elif 'prompt' in label: vals.append(prompt)
+              elif 'seed' in label: vals.append(example if example is not None else 0)
+              elif 'duration' in label or 'seconds' in label: vals.append(example if example is not None else 3)
+              elif 'fps' in label: vals.append(example if example is not None else 16)
+              elif 'step' in label: vals.append(example if example is not None else 4)
+              elif 'guidance' in label or 'cfg' in label: vals.append(example if example is not None else 1)
+              elif 'width' in label: vals.append(example if example is not None else 480)
+              elif 'height' in label: vals.append(example if example is not None else 832)
+              else: vals.append(example)
+          api_name=endpoint.lstrip('/')
+          body=json.dumps({'data':vals}).encode()
+          queued=json.loads(get(base+'/gradio_api/call/'+api_name, body))
+          print('QUEUED=', queued)
+          event=queued.get('event_id')
+          if not event: raise SystemExit('No event_id')
+          result=get(base+'/gradio_api/call/'+api_name+'/'+event)
+          print('RESULT_BEGIN')
+          print(result[:20000])
+          print('RESULT_END')
+          print('MP4_LIKE=', re.findall(r'[^\s\"\']+\.mp4[^\s\"\']*', result, flags=re.I)[:20])
+          PY
