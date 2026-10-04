@@ -75,10 +75,10 @@ const agentSkills: Record<string, string[]> = {
 };
 
 const kaiVideoTemplates = [
-  {name: 'Funny Cartoon', prompt: 'Create a 10-second funny cartoon video. A cute office worker spills coffee on the desk, looks shocked, then pretends nothing happened while coworkers stare. Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous tone, smooth animation, vertical 9:16.'},
-  {name: 'IT Comedy', prompt: 'Create a fresh 10-second funny IT cartoon video with a new office technology mishap. Bright colorful 2D cartoon style, exaggerated reactions, playful comedy, smooth animation, vertical 9:16.'},
-  {name: 'Security Joke', prompt: 'Create a 10-second funny cartoon video of a cybersecurity analyst celebrating that the system is secure, then 99 warning alerts suddenly appear on the monitor. Funny timing, exaggerated facial expression, colorful cartoon office, vertical 9:16.'},
-  {name: 'Short Promo', prompt: 'Create a 10-second vertical animated promo video with energetic motion, clean modern graphics, short punchy scenes, upbeat mood, and a strong final hero shot. Format 9:16 for Shorts and Reels.'}
+  {name: 'Funny Cartoon', prompt: 'Create a short funny cartoon video optimized for free ZeroGPU generation. A cute office worker spills coffee on the desk, looks shocked, then pretends nothing happened while coworkers stare. Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous tone, smooth animation, vertical 9:16.'},
+  {name: 'IT Comedy', prompt: 'Create a fresh short funny IT cartoon video optimized for free ZeroGPU generation with a new office technology mishap. Bright colorful 2D cartoon style, exaggerated reactions, playful comedy, smooth animation, vertical 9:16.'},
+  {name: 'Security Joke', prompt: 'Create a short funny cartoon video of a cybersecurity analyst celebrating that the system is secure, then 99 warning alerts suddenly appear on the monitor. Funny timing, exaggerated facial expression, colorful cartoon office, vertical 9:16.'},
+  {name: 'Short Promo', prompt: 'Create a short vertical animated promo video with energetic motion, clean modern graphics, short punchy scenes, upbeat mood, and a strong final hero shot. Format 9:16 for Shorts and Reels.'}
 ];
 
 const leoPortfolioTemplates = [
@@ -106,7 +106,7 @@ function makeItComedyPrompt() {
   let index = Math.floor(Math.random() * itComedyIdeas.length);
   if (itComedyIdeas.length > 1 && index === last) index = (index + 1) % itComedyIdeas.length;
   localStorage.setItem(IT_COMEDY_LAST_KEY, String(index));
-  return `Create a 10-second funny cartoon video. ${itComedyIdeas[index]} Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous timing, smooth animation, vertical 9:16.`;
+  return `Create a short funny cartoon video optimized for free ZeroGPU generation. ${itComedyIdeas[index]} Bright colorful 2D cartoon style, exaggerated facial expressions, playful movement, humorous timing, smooth animation, vertical 9:16.`;
 }
 
 function normalizeKaiTask(t: Task): Task {
