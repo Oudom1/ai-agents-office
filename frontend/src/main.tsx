@@ -38,6 +38,7 @@ type Task = {
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
 const API = API_BASE + '/api';
+const TYPING_TOOL_URL = 'https://typing-tool-pu0o.onrender.com';
 const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
 function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
@@ -143,6 +144,7 @@ function App() {
   const [taskTitle, setTaskTitle] = useState('');
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now());
+  const [showTypingTool, setShowTypingTool] = useState(false);
 
   const refresh = async () => {
     try {
@@ -499,7 +501,7 @@ function App() {
 
           {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><div style={{margin:'10px 0',padding:'10px 12px',borderRadius:'8px',border:`1px solid ${kaiProblem ? '#ff4772' : '#2b506b'}`,background:kaiProblem ? '#35121dcc' : '#102536cc',color:kaiProblem ? '#ffd8e1' : '#bfe9ff',fontSize:'12px',lineHeight:1.45}}><b>{kaiProblem ? '⚠ KAI ERROR' : 'KAI LIVE STATUS'}</b><div style={{marginTop:'5px'}}>{kaiProblem || kaiStatusText}</div></div><p className="kai-note">Real provider route: Hugging Face ZeroGPU LTX Video Fast. Longer requests are split into short scenes, merged into one MP4, then uploaded to Google Drive when Drive OAuth is configured. FREE ONLY; no paid fallback. Kai completes only after the final MP4 exists.</p><div className="skill-tags"><span>PixVerse Free</span><span>Hugging Face ZeroGPU</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
-          {selected === 'developer' && <div className="panel developer-panel"><div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div><p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p><div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span></div><label>Quick development tasks</label><div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
+          {selected === 'developer' && <div className="panel developer-panel"><div className="kai-title"><h2>Leo Developer Studio</h2><span>PORTFOLIO</span></div><p className="kai-note">Alex delegates portfolio development to Leo. Leo focuses on React, TypeScript, responsive UI, GitHub integration, testing handoff to Lina, and deployment preparation.</p><div className="skill-tags"><span>React</span><span>TypeScript</span><span>UI / UX</span><span>GitHub</span><span>GitHub Pages</span><span>Portfolio</span><span>Typing Tool</span></div><button className="assign-btn" style={{marginBottom:'10px'}} onClick={() => setShowTypingTool(true)}>⌨ Open Typing Tool</button><p className="kai-note">Integrated training app: Easy / Medium / Hard, 15 / 30 / 60 seconds, WPM, accuracy, history, leaderboard, levels, and mountain challenges.</p><label>Quick development tasks</label><div className="template-grid">{leoPortfolioTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchLeoTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
 
           <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a => <div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><span style={{fontSize:'8px',color:'#6f8ca5'}}>{agentSkills[a.id].join(' • ')}</span><MiniProgress completed={completedByAgent[a.id] ?? 0} /></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
 
@@ -508,6 +510,7 @@ function App() {
           <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0, 6).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
         </aside>
       </main>
+      {showTypingTool && <div onClick={() => setShowTypingTool(false)} style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(2,8,18,.86)',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px'}}><div onClick={e => e.stopPropagation()} style={{width:'min(1500px,96vw)',height:'min(920px,92vh)',background:'#081523',border:'1px solid #294b68',borderRadius:'14px',boxShadow:'0 24px 80px rgba(0,0,0,.55)',overflow:'hidden',display:'flex',flexDirection:'column'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #294b68',background:'#0d1d2d'}}><div><b style={{color:'#e9f7ff'}}>⌨ Leo Typing Tool</b><span style={{marginLeft:'10px',fontSize:'11px',color:'#6f8ca5'}}>Integrated training workspace</span></div><div style={{display:'flex',gap:'8px'}}><a href={TYPING_TOOL_URL} target="_blank" rel="noreferrer" style={{padding:'7px 10px',border:'1px solid #315878',borderRadius:'7px',color:'#bfe9ff',textDecoration:'none',fontSize:'11px'}}>Open Full Screen ↗</a><button onClick={() => setShowTypingTool(false)} style={{padding:'7px 11px',background:'#35121d',border:'1px solid #8f3d4b',borderRadius:'7px',color:'#ffd8e1'}}>Close</button></div></div><iframe title="Leo Typing Tool" src={TYPING_TOOL_URL} style={{width:'100%',height:'100%',border:0,background:'#07111c'}} allow="clipboard-read; clipboard-write" /></div></div>}
     </div>
   );
 }
