@@ -8,14 +8,14 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect live Hugging Face Gradio video response
+      - name: Test LTX Video Fast ZeroGPU
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, re, urllib.request
-          base='https://numanajmal0-wan-video-api.hf.space'
-          def get(url, data=None, timeout=180):
+          base='https://lightricks-ltx-video-distilled.hf.space'
+          def get(url, data=None, timeout=360):
               headers={'Accept':'application/json'}
               if data is not None: headers['Content-Type']='application/json'
               req=urllib.request.Request(url,data=data,headers=headers)
@@ -23,41 +23,42 @@ jobs:
                   return r.read().decode('utf-8','replace')
           info=json.loads(get(base+'/gradio_api/info'))
           eps=info.get('named_endpoints',{})
-          endpoint,meta=next((x for x in eps.items() if re.search(r'generate.*video|video.*generate|text.*video|t2v',x[0],re.I)), next((x for x in eps.items() if re.search(r'generate|predict',x[0],re.I)), (None,None)))
+          print('ENDPOINTS=',list(eps.keys()))
+          endpoint,meta=next((x for x in eps.items() if re.search(r'generate.*video|video.*generate|text.*video|t2v|generate',x[0],re.I)), (None,None))
           if not endpoint: raise SystemExit('No generation endpoint')
-          prompt='A simple colorful cartoon of a smiling IT administrator waving, vertical 9:16 video.'
+          print('CHOSEN=',endpoint)
+          print('PARAMS=',json.dumps(meta.get('parameters',[]),indent=2)[:12000])
+          prompt='A simple colorful 2D cartoon of a smiling IT administrator waving in an office, playful animation, vertical 9:16.'
           vals=[]
           for p in meta.get('parameters',[]):
               label=str(p.get('label') or p.get('parameter_name') or p.get('name') or '').lower()
-              default=p.get('parameter_default', p.get('default', p.get('value')))
+              default=p.get('parameter_default',p.get('default',p.get('value')))
               example=p.get('example_input')
-              if label=='model' or 'model_key' in label: vals.append('wan-base')
-              elif 'custom checkpoint' in label or 'custom_ckpt' in label: vals.append('')
-              elif 'negative' in label: vals.append(default or '')
+              if 'negative' in label: vals.append(default or '')
               elif 'prompt' in label: vals.append(prompt)
-              elif 'width' in label: vals.append(320)
-              elif 'height' in label: vals.append(576)
-              elif 'frame' in label: vals.append(21)
-              elif 'step' in label: vals.append(6)
-              elif 'guidance' in label or 'cfg' in label: vals.append(5)
               elif 'seed' in label: vals.append(-1)
-              elif 'lora' in label: vals.append(0)
+              elif 'height' in label: vals.append(512)
+              elif 'width' in label: vals.append(288)
+              elif 'frame' in label: vals.append(25)
+              elif 'step' in label: vals.append(8)
+              elif 'guidance' in label or 'cfg' in label: vals.append(default if default is not None else 3)
+              elif 'duration' in label or 'seconds' in label: vals.append(2)
+              elif 'fps' in label: vals.append(16)
+              elif 'image' in label: vals.append(None)
               else: vals.append(default if default is not None else example)
-          print('CHOSEN=', endpoint)
-          print('INPUTS=', vals)
+          print('INPUTS=',vals)
           api_name=endpoint.lstrip('/')
-          queued=json.loads(get(base+'/gradio_api/call/'+api_name, json.dumps({'data':vals}).encode()))
-          print('QUEUED=', queued)
+          queued=json.loads(get(base+'/gradio_api/call/'+api_name,json.dumps({'data':vals}).encode()))
+          print('QUEUED=',queued)
           event=queued.get('event_id')
           if not event: raise SystemExit('No event_id')
-          result=get(base+'/gradio_api/call/'+api_name+'/'+event, timeout=300)
+          result=get(base+'/gradio_api/call/'+api_name+'/'+event)
           print('RESULT_BEGIN')
           print(result[:30000])
           print('RESULT_END')
-          if 'event: error' in result:
-              raise SystemExit('Provider returned error event')
-          mp4=re.findall(r'https?://[^\s\"\']+\.mp4[^\s\"\']*|/[^\s\"\']+\.mp4[^\s\"\']*', result, flags=re.I)
-          print('MP4_LIKE=', mp4[:20])
+          if 'event: error' in result: raise SystemExit('Provider returned error event')
+          mp4=re.findall(r'https?://[^\s\"\']+\.mp4[^\s\"\']*|/[^\s\"\']+\.mp4[^\s\"\']*',result,flags=re.I)
+          print('MP4_LIKE=',mp4[:20])
           if not mp4: raise SystemExit('No MP4 found in provider response')
           print('PASS: real MP4 reference returned')
           PY
