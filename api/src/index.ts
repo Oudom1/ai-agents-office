@@ -338,14 +338,6 @@ function buildHfInputs(parameters:any[],prompt:string){
   });
 }
 
-function requestedVideoSeconds(prompt:string){
-  const minute=prompt.match(/(\d+)\s*[- ]?\s*(?:minute|minutes|min)/i);
-  if(minute) return Math.max(3,Math.min(60,Number(minute[1])*60));
-  const second=prompt.match(/(\d+)\s*[- ]?\s*(?:second|seconds|sec|secs|s)/i);
-  if(second) return Math.max(3,Math.min(60,Number(second[1])));
-  return 10;
-}
-
 function providerErrorFromSse(text:string):string|undefined{
   const lines=text.split('\n');
   let errorEvent=false;
@@ -398,17 +390,11 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string,attempt=1){
     }
     if(!videoUrl) throw new Error('ZeroGPU completed without a real MP4 URL');
     job.videoUrl=videoUrl;
-    const targetSec=requestedVideoSeconds(prompt);
-    const taskStarted=task?.createdAt ? new Date(task.createdAt).getTime() : Date.now();
-    const elapsedSec=Math.max(0,Math.floor((Date.now()-taskStarted)/1000));
-    const remainingSec=Math.max(0,targetSec-elapsedSec);
-    if(remainingSec>0){
-      job.status='generating';
-      if(task){(task as any).phase='finalizing';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Real MP4 generated — finalizing task timing for ${remainingSec}s (target video ${targetSec}s)`;delete (task as any).blocker;}
-      await new Promise(resolve=>setTimeout(resolve,remainingSec*1000));
-    }
     job.status='done';
-    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).driveUrl=videoUrl;(task as any).resultMessage=`Complete — real MP4 generated. Kai worked for at least the requested ${targetSec}s video duration.`;delete (task as any).blocker;task.completedAt=new Date().toISOString();}
+    const completedAt=new Date();
+    const startedMs=task?.startedAt ? new Date((task as any).startedAt).getTime() : (task?.createdAt ? new Date(task.createdAt).getTime() : completedAt.getTime());
+    const actualSec=Math.max(0,Math.floor((completedAt.getTime()-startedMs)/1000));
+    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).driveUrl=videoUrl;(task as any).durationSec=actualSec;(task as any).resultMessage=`Complete — real MP4 generated after ${actualSec}s of actual provider processing.`;delete (task as any).blocker;task.completedAt=completedAt.toISOString();}
     const kai=agents.find(a=>a.id==='implement');
     if(kai){(kai as any).state='working';(kai as any).currentTask=undefined;(kai as any).destination=(kai as any).home;}
   }catch(e:any){
@@ -443,7 +429,7 @@ app.post('/api/video/generate', requireAuth, async (req:any,res)=>{
   const generationId=randomBytes(18).toString('hex');
   videoJobs.set(generationId,{status:'generating',provider:'Hugging Face ZeroGPU LTX Video Fast',taskId});
   const task=tasks.find(t=>t.id===taskId);
-  if(task){(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Queued on Hugging Face ZeroGPU — free best-effort generation';}
+  if(task){(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).startedAt=new Date().toISOString();(task as any).resultMessage='Generating on Hugging Face ZeroGPU — Kai stays working until the real MP4 is returned';}
   void runHfVideo(generationId,prompt,taskId);
   addSecurityLog(req,'SUCCESS',req.auth?.user||'Admin',`Kai queued Hugging Face ZeroGPU video ${generationId}`);
   return res.status(202).json({ok:true,provider:'Hugging Face ZeroGPU LTX Video Fast',generationId,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID});
@@ -455,7 +441,10 @@ app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
   if(!job) return res.status(404).json({error:'Generation job not found'});
   if(job.status==='done' && job.videoUrl) return res.json({ok:true,status:'done',provider:job.provider,videoUrl:job.videoUrl,generationId});
   if(job.status==='failed') return res.json({ok:false,status:'failed',provider:job.provider,generationId,error:job.error});
-  return res.json({ok:true,status:'generating',provider:job.provider,generationId,bestEffort:true});
+  const task=job.taskId ? tasks.find(t=>t.id===job.taskId) : undefined;
+  const startedMs=task?.startedAt ? new Date((task as any).startedAt).getTime() : Date.now();
+  const elapsedSec=Math.max(0,Math.floor((Date.now()-startedMs)/1000));
+  return res.json({ok:true,status:'generating',provider:job.provider,generationId,bestEffort:true,elapsedSec});
 });
 
 app.post('/api/manager/call/:agentId', requireAuth, (req,res)=>{
