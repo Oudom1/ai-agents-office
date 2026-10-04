@@ -19,6 +19,8 @@ const HF_SPACE_HOST = process.env.HF_SPACE_HOST || HF_SPACE_ID.toLowerCase().rep
 const HF_TOKEN = process.env.HF_TOKEN || '';
 const require = createRequire(import.meta.url);
 const ffmpegPath = require('ffmpeg-static') as string | null;
+const { EdgeTTS } = require('node-edge-tts');
+const KAI_TTS_VOICE = process.env.KAI_TTS_VOICE || 'en-US-GuyNeural';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN || '';
@@ -135,7 +137,7 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
-  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8},
+  videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8,frame:'512x288 16:9',voice:'Edge neural TTS (free best-effort)'},
   googleDrive:{configured:driveConfigured(),folderId:GOOGLE_DRIVE_FOLDER_ID},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
@@ -375,6 +377,25 @@ async function mergeClips(files:string[],output:string){
   catch{ await runFfmpeg(['-y','-f','concat','-safe','0','-i',listPath,'-c:v','libx264','-preset','ultrafast','-c:a','aac','-movflags','+faststart',output]); }
 }
 
+async function normalizeSceneClip(input:string,output:string,seconds:number){
+  await runFfmpeg(['-y','-stream_loop','-1','-i',input,'-t',String(seconds),'-vf','scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2,setsar=1','-an','-r','24','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-movflags','+faststart',output]);
+}
+function narrationFromPrompt(prompt:string){
+  if(/\b(?:no voice|silent|mute|without (?:voice|audio|narration))\b/i.test(prompt)) return '';
+  let text=prompt.replace(/\b(?:create|make|generate|produce)\b/ig,'').replace(/\b\d+\s*(?:minutes?|mins?|seconds?|secs?)\b/ig,'').replace(/\b(?:video|cartoon|animation|clip)\b/ig,'').replace(/\s+/g,' ').trim();
+  if(!text) text='Here is Kai with your animated story.';
+  return text.slice(0,600);
+}
+async function addNarration(videoPath:string,output:string,prompt:string,targetSeconds:number){
+  const narration=narrationFromPrompt(prompt);
+  if(!narration){ await writeFile(output,await readFile(videoPath)); return false; }
+  const audioPath=join(tmpdir(),`kai-voice-${randomBytes(8).toString('hex')}.mp3`);
+  const tts=new EdgeTTS({voice:KAI_TTS_VOICE,lang:'en-US',outputFormat:'audio-24khz-96kbitrate-mono-mp3',rate:'+0%',pitch:'+0Hz',volume:'+0%',timeout:30000});
+  await tts.ttsPromise(narration,audioPath);
+  await runFfmpeg(['-y','-i',videoPath,'-i',audioPath,'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','128k','-af','apad','-t',String(targetSeconds),'-movflags','+faststart',output]);
+  return true;
+}
+
 function normalizeVideoUrl(value:any):string|undefined{
   const base=hfSpaceBase();
   const walk=(v:any):string|undefined=>{
@@ -405,13 +426,13 @@ function buildHfInputs(parameters:any[],prompt:string,clipSeconds=8){
     const example=p?.example_input;
     if(name==='input_image_filepath' || name==='input_video_filepath') return null;
     if(name==='mode') return 'text-to-video';
-    if(name==='randomize_seed') return true;
+    if(name==='randomize_seed') return false;
     if(name==='ui_frames_to_use') return def ?? 9;
     if(label.includes('negative')) return def ?? '';
     if(label.includes('prompt')) return prompt;
     if(name==='seed_ui' || label==='seed') return 42;
-    if(label.includes('height')) return 512;
-    if(label.includes('width')) return 288;
+    if(label.includes('height')) return 288;
+    if(label.includes('width')) return 512;
     if(label.includes('guidance') || label.includes('cfg')) return def ?? 1;
     if(label.includes('duration') || label.includes('seconds')) return Math.max(1,Math.min(8,clipSeconds));
     return def ?? example ?? null;
@@ -459,17 +480,17 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
       const sceneSec=Math.max(1,Math.min(8,remaining)); remaining-=sceneSec;
       if(task){(task as any).phase='generating';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`Generating scene ${i+1}/${sceneCount} (${sceneSec}s target). Kai stays working until the final MP4 is ready.`;delete (task as any).blocker;}
       const scenePrompt=sceneCount>1?`${prompt}\nScene ${i+1} of ${sceneCount}. Keep the same characters, visual style and story continuity. Continue naturally and last about ${sceneSec} seconds.`:prompt;
-      const clipUrl=await generateHfClipWithRetry(scenePrompt,sceneSec); const clipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}.mp4`); await downloadClip(clipUrl,clipPath); clips.push(clipPath);
+      const clipUrl=await generateHfClipWithRetry(scenePrompt,sceneSec); const rawClipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}-raw.mp4`); const clipPath=join(workDir,`scene-${String(i+1).padStart(2,'0')}.mp4`); await downloadClip(clipUrl,rawClipPath); await normalizeSceneClip(rawClipPath,clipPath,sceneSec); clips.push(clipPath);
     }
     if(task){(task as any).phase='merging';(task as any).resultMessage=`All ${sceneCount} scene(s) generated — merging into one MP4...`;}
-    const finalPath=join(workDir,'final.mp4'); await mergeClips(clips,finalPath); job.localPath=finalPath; job.videoUrl=`${PUBLIC_BASE_URL}/api/video/files/${jobId}`;
+    const mergedPath=join(workDir,'merged.mp4'); await mergeClips(clips,mergedPath); const finalPath=join(workDir,'final.mp4'); if(task){(task as any).phase='voicing';(task as any).resultMessage='Scenes merged — adding free neural voice narration...';} let voiceAdded=false; try{voiceAdded=await addNarration(mergedPath,finalPath,prompt,targetSeconds);}catch(e:any){console.warn('Kai TTS unavailable, keeping video without narration',String(e?.message||e));await writeFile(finalPath,await readFile(mergedPath));} job.localPath=finalPath; job.videoUrl=`${PUBLIC_BASE_URL}/api/video/files/${jobId}`; (job as any).voiceAdded=voiceAdded;
     let driveUrl:string|undefined;
     if(driveConfigured()){
       if(task){(task as any).phase='uploading';(task as any).resultMessage='Final MP4 ready — uploading to Kai Video Workspace in Google Drive...';}
       const uploaded=await uploadToGoogleDrive(finalPath,`Kai-${new Date().toISOString().replace(/[:.]/g,'-')}-${jobId.slice(0,8)}.mp4`); driveUrl=uploaded?.webViewLink; job.driveUrl=driveUrl;
     }
     job.status='done'; const completedAt=new Date(); const startedMs=task?.startedAt?new Date((task as any).startedAt).getTime():completedAt.getTime(); const actualSec=Math.max(0,Math.floor((completedAt.getTime()-startedMs)/1000));
-    if(task){task.status='done';(task as any).phase='completed';(task as any).videoUrl=job.videoUrl;(task as any).driveUrl=driveUrl;(task as any).durationSec=targetSeconds;(task as any).generationTimeSec=actualSec;(task as any).resultMessage=driveUrl?`Complete — ${targetSeconds}s target video assembled from ${sceneCount} scene(s), generated in ${actualSec}s and uploaded to Google Drive.`:`Complete — ${targetSeconds}s target video assembled from ${sceneCount} scene(s) in ${actualSec}s. Google Drive upload is not configured yet.`;delete (task as any).blocker;task.completedAt=completedAt.toISOString();}
+    if(task){task.status='done';(task as any).phase='completed';(task as any).videoUrl=job.videoUrl;(task as any).driveUrl=driveUrl;(task as any).durationSec=targetSeconds;(task as any).generationTimeSec=actualSec;(task as any).resultMessage=driveUrl?`Complete — ${targetSeconds}s target video assembled from ${sceneCount} normalized 16:9 scene(s), ${voiceAdded?'voice added':'voice unavailable'}, generated in ${actualSec}s and uploaded to Google Drive.`:`Complete — ${targetSeconds}s target video assembled from ${sceneCount} normalized 16:9 scene(s), ${voiceAdded?'voice added':'voice unavailable'}, in ${actualSec}s. Google Drive upload is not configured yet.`;delete (task as any).blocker;task.completedAt=completedAt.toISOString();}
     if(kai){(kai as any).state='working';(kai as any).currentTask=undefined;(kai as any).destination=(kai as any).home;}
   }catch(e:any){
     const err=String(e?.message||e||'ZeroGPU generation failed'); job.status='failed';job.error=err; const finalMsg=/quota|exceeded|overquota/i.test(err)?`Free ZeroGPU quota unavailable: ${err}`:`Kai pipeline failed: ${err}`;
