@@ -1,0 +1,63 @@
+name: Smooth Kai Final
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-qa:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Smooth Kai UI and provider errors
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          f=Path('frontend/src/main.tsx')
+          s=f.read_text()
+          s=s.replace("const blockers = activeTasks.filter(t => t.blocker);", "const blockers = activeTasks.filter(t => t.blocker).filter((t,i,arr) => arr.findIndex(x => x.agentId === t.agentId) === i);")
+          s=s.replace("'Free provider returned an error.'", "'Provider error — see exact reason above.'")
+          s=s.replace("'Provider Error'", "'Retry Provider'")
+          f.write_text(s)
+
+          p=Path('api/src/index.ts')
+          a=p.read_text()
+          old="""        return String(payload?.error || payload?.title || 'Provider returned an error');"""
+          new="""        const detail = payload?.error?.message || payload?.error?.detail || payload?.error || payload?.message || payload?.detail || payload?.title;\n        if (typeof detail === 'string' && detail.trim()) return detail.trim();\n        return 'Hugging Face ZeroGPU returned an unspecified provider error. The free GPU/Space may be temporarily unavailable; retry shortly.';"""
+          if old in a:
+              a=a.replace(old,new)
+          a=a.replace("}catch{return raw || 'Provider returned an error';}", "}catch{return raw || 'Hugging Face ZeroGPU returned an unspecified provider error. Retry shortly.';}")
+          a=a.replace("if(providerError) throw new Error(providerError);", "if(providerError){ console.error('ZeroGPU provider detail:', providerError); throw new Error(providerError); }")
+          p.write_text(a)
+          PY
+      - name: Lina QA build and static checks
+        run: |
+          npm install
+          npm run build -w api
+          npm run build -w frontend
+          ! grep -q "Free router waiting for provider" frontend/src/main.tsx
+          grep -q "findIndex(x => x.agentId === t.agentId)" frontend/src/main.tsx
+          grep -q "unspecified provider error" api/src/index.ts
+      - name: Lina provider reachability smoke test
+        run: |
+          curl -fsS --max-time 20 https://lightricks-ltx-video-distilled.hf.space/gradio_api/info >/tmp/ltx-info.json
+          test -s /tmp/ltx-info.json
+          echo "Lina PASS: LTX Gradio info endpoint reachable"
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/src/index.ts frontend/src/main.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Smooth Kai errors and deduplicate blockers"
+          git push
