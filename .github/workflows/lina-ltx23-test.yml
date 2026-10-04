@@ -1,0 +1,68 @@
+name: Lina LTX23 Provider Test
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lina direct ZeroGPU generation test
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,re,urllib.request
+          base='https://zerocollabs-ltx-2-3-turbo.hf.space'
+          def req(url,data=None,timeout=300):
+              h={'Accept':'application/json'}
+              if data is not None: h['Content-Type']='application/json'
+              r=urllib.request.Request(url,data=data,headers=h)
+              with urllib.request.urlopen(r,timeout=timeout) as x:return x.read().decode('utf-8','replace')
+          info=json.loads(req(base+'/gradio_api/info',timeout=60))
+          eps=info.get('named_endpoints',{})
+          print('ENDPOINTS',list(eps.keys()))
+          chosen=None
+          for k,v in eps.items():
+              if re.search(r'text.*video|t2v|generate.*video|video.*generate|generate',k,re.I):
+                  chosen=(k,v);break
+          if not chosen: raise SystemExit('No generation endpoint')
+          endpoint,meta=chosen
+          print('CHOSEN',endpoint)
+          print('PARAMETERS',json.dumps(meta.get('parameters',[]),indent=2)[:20000])
+          prompt='A cheerful IT administrator waves at the camera in a colorful 2D cartoon office, vertical 9:16, smooth motion.'
+          vals=[]
+          for p in meta.get('parameters',[]):
+              name=str(p.get('parameter_name') or '').lower()
+              label=str(p.get('label') or name or p.get('name') or '').lower()
+              default=p.get('parameter_default',p.get('default',p.get('value')))
+              example=p.get('example_input')
+              if 'prompt' in label and 'negative' not in label: val=prompt
+              elif 'negative' in label: val=default or ''
+              elif 'mode' in label: val=default or 'Text to Video'
+              elif 'duration' in label or 'seconds' in label: val=2
+              elif 'aspect' in label or 'resolution' in label: val=default if default is not None else example
+              elif 'seed' in label: val=-1
+              elif 'enhance' in label: val=False
+              elif 'image' in label or 'audio' in label or 'video' in label and 'output' not in label: val=None
+              else: val=default if default is not None else example
+              vals.append(val)
+          print('INPUTS',vals)
+          api=endpoint.lstrip('/')
+          q=json.loads(req(base+'/gradio_api/call/'+api,json.dumps({'data':vals}).encode(),timeout=60))
+          print('QUEUED',q)
+          eid=q.get('event_id')
+          if not eid: raise SystemExit('No event_id')
+          out=req(base+'/gradio_api/call/'+api+'/'+eid,timeout=300)
+          print('RESULT',out[:30000])
+          if 'event: error' in out: raise SystemExit('Provider returned error event')
+          mp4=re.findall(r'https?://[^\s\"\']+\.mp4[^\s\"\']*|/[^\s\"\']+\.mp4[^\s\"\']*',out,re.I)
+          print('MP4',mp4[:10])
+          if not mp4: raise SystemExit('No MP4 reference')
+          print('LINA_PASS_REAL_MP4')
+          PY
