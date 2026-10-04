@@ -9,7 +9,7 @@ const port = Number(process.env.PORT || 4000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
-const HF_SPACE_ID = process.env.HF_SPACE_ID || 'numanajmal0/Wan-Video-API';
+const HF_SPACE_ID = process.env.HF_SPACE_ID || 'Lightricks/ltx-video-distilled';
 const HF_SPACE_HOST = process.env.HF_SPACE_HOST || HF_SPACE_ID.toLowerCase().replace(/_/g,'-').replace(/\//g,'-') + '.hf.space';
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
@@ -297,13 +297,15 @@ function normalizeVideoUrl(value:any):string|undefined{
     if(!v) return undefined;
     if(typeof v==='string'){
       if(/^https?:\/\//i.test(v) && /\.mp4(?:\?|$)/i.test(v)) return v;
-      if(v.startsWith('/') && /\.mp4(?:\?|$)/i.test(v)) return base+v;
+      if(v.startsWith('/tmp/') && /\.mp4(?:\?|$)/i.test(v)) return `${base}/gradio_api/file=${v}`;
+      if(v.startsWith('/gradio_api/file=') && /\.mp4(?:\?|$)/i.test(v)) return base+v;
       return undefined;
     }
     if(Array.isArray(v)){ for(const item of v){const found=walk(item);if(found)return found;} return undefined; }
     if(typeof v==='object'){
-      const direct=(v.url || v.video || v.video_url || v.path || v.name) as any;
+      const direct=(v.url || v.video_url || v.path || v.name) as any;
       const found=walk(direct); if(found) return found;
+      if(v.video){const nestedVideo=walk(v.video);if(nestedVideo)return nestedVideo;}
       for(const val of Object.values(v)){const nested=walk(val);if(nested)return nested;}
     }
     return undefined;
@@ -313,19 +315,39 @@ function normalizeVideoUrl(value:any):string|undefined{
 
 function buildHfInputs(parameters:any[],prompt:string){
   return (parameters||[]).map((p:any)=>{
-    const label=String(p?.label||p?.parameter_name||p?.name||'').toLowerCase();
-    const example=p?.example_input ?? p?.default ?? p?.value;
-    if(label.includes('negative')) return example ?? '';
+    const name=String(p?.parameter_name||'').toLowerCase();
+    const label=String(p?.label||name||p?.name||'').toLowerCase();
+    const def=p?.parameter_default ?? p?.default ?? p?.value;
+    const example=p?.example_input;
+    if(name==='input_image_filepath' || name==='input_video_filepath') return null;
+    if(name==='mode') return 'text-to-video';
+    if(name==='randomize_seed') return true;
+    if(name==='ui_frames_to_use') return def ?? 9;
+    if(label.includes('negative')) return def ?? '';
     if(label.includes('prompt')) return prompt;
-    if(label.includes('seed')) return example ?? 0;
-    if(label.includes('duration') || label.includes('seconds')) return example ?? 3;
-    if(label.includes('fps')) return example ?? 16;
-    if(label.includes('step')) return example ?? 4;
-    if(label.includes('guidance') || label.includes('cfg')) return example ?? 1;
-    if(label.includes('width')) return example ?? 480;
-    if(label.includes('height')) return example ?? 832;
-    return example ?? null;
+    if(name==='seed_ui' || label==='seed') return 42;
+    if(label.includes('height')) return 512;
+    if(label.includes('width')) return 288;
+    if(label.includes('guidance') || label.includes('cfg')) return def ?? 1;
+    if(label.includes('duration') || label.includes('seconds')) return 2;
+    return def ?? example ?? null;
   });
+}
+
+function providerErrorFromSse(text:string):string|undefined{
+  const lines=text.split('\n');
+  let errorEvent=false;
+  for(const line of lines){
+    if(line.trim()==='event: error') errorEvent=true;
+    if(errorEvent && line.startsWith('data:')){
+      const raw=line.slice(5).trim();
+      try{
+        const payload=JSON.parse(raw);
+        return String(payload?.error || payload?.title || 'Provider returned an error');
+      }catch{return raw || 'Provider returned an error';}
+    }
+  }
+  return undefined;
 }
 
 async function runHfVideo(jobId:string,prompt:string,taskId:string){
@@ -337,8 +359,8 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
     const info:any=await infoRes.json();
     const endpoints=info?.named_endpoints || {};
     const entries=Object.entries(endpoints) as [string,any][];
-    const chosen=entries.find(([k])=>/generate.*video|video.*generate|text.*video|t2v/i.test(k)) || entries.find(([k])=>/generate|predict/i.test(k));
-    if(!chosen) throw new Error('No usable Gradio video endpoint found');
+    const chosen=entries.find(([k])=>/text.*video|t2v/i.test(k)) || entries.find(([k])=>/generate.*video|video.*generate|generate|predict/i.test(k));
+    if(!chosen) throw new Error('No usable Gradio text-to-video endpoint found');
     const [endpoint,meta]=chosen;
     const apiName=endpoint.replace(/^\//,'');
     const data=buildHfInputs(meta?.parameters||[],prompt);
@@ -352,6 +374,8 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
     const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`);
     if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
     const text=await stream.text();
+    const providerError=providerErrorFromSse(text);
+    if(providerError) throw new Error(providerError);
     let videoUrl:string|undefined;
     for(const line of text.split('\n')){
       if(!line.startsWith('data:')) continue;
@@ -360,17 +384,17 @@ async function runHfVideo(jobId:string,prompt:string,taskId:string){
     }
     if(!videoUrl) throw new Error('ZeroGPU completed without a real MP4 URL');
     job.status='done'; job.videoUrl=videoUrl;
-    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).driveUrl=videoUrl;(task as any).resultMessage='Complete — real MP4 generated by Hugging Face ZeroGPU';task.completedAt=new Date().toISOString();}
+    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).driveUrl=videoUrl;(task as any).resultMessage='Complete — real MP4 generated by Hugging Face ZeroGPU LTX Video Fast';task.completedAt=new Date().toISOString();}
   }catch(e:any){
     job.status='failed'; job.error=String(e?.message||e||'ZeroGPU generation failed');
-    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).resultMessage=`ZeroGPU unavailable: ${job.error}`;}
+    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).resultMessage=`ZeroGPU unavailable: ${job.error}`;}
     console.error('Hugging Face ZeroGPU generation error',e);
   }
 }
 
 app.get('/api/video/providers', requireAuth, (_req,res)=>{
   res.json({freeOnly:true,paidFallback:false,bestEffort:true,providers:[
-    {id:'hf-zerogpu',name:'Hugging Face ZeroGPU Wan',configured:true,mode:'api',priority:1,space:HF_SPACE_ID,note:'Free best-effort; queue/availability can change'},
+    {id:'hf-zerogpu-ltx',name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,mode:'api',priority:1,space:HF_SPACE_ID,note:'Free best-effort; queue/availability can change'},
     {id:'pixverse',name:'PixVerse Free',configured:false,mode:'manual',priority:2},
     {id:'runway',name:'Runway Free/Trial',configured:false,mode:'manual',priority:3}
   ]});
@@ -381,12 +405,12 @@ app.post('/api/video/generate', requireAuth, async (req:any,res)=>{
   const taskId=String(req.body?.taskId||'').trim();
   if(!prompt) return res.status(400).json({error:'prompt is required'});
   const generationId=randomBytes(18).toString('hex');
-  videoJobs.set(generationId,{status:'generating',provider:'Hugging Face ZeroGPU Wan',taskId});
+  videoJobs.set(generationId,{status:'generating',provider:'Hugging Face ZeroGPU LTX Video Fast',taskId});
   const task=tasks.find(t=>t.id===taskId);
-  if(task){(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Queued on Hugging Face ZeroGPU — free best-effort generation';}
+  if(task){(task as any).provider='Hugging Face ZeroGPU LTX Video Fast';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Queued on Hugging Face ZeroGPU — free best-effort generation';}
   void runHfVideo(generationId,prompt,taskId);
   addSecurityLog(req,'SUCCESS',req.auth?.user||'Admin',`Kai queued Hugging Face ZeroGPU video ${generationId}`);
-  return res.status(202).json({ok:true,provider:'Hugging Face ZeroGPU Wan',generationId,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID});
+  return res.status(202).json({ok:true,provider:'Hugging Face ZeroGPU LTX Video Fast',generationId,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID});
 });
 
 app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
