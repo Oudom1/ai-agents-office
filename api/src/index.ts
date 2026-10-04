@@ -9,7 +9,8 @@ const port = Number(process.env.PORT || 4000);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const PASSWORD_RESET_KEY = process.env.PASSWORD_RESET_KEY || '';
-const LEONARDO_API_KEY = process.env.LEONARDO_API_KEY || '';
+const HF_SPACE_ID = process.env.HF_SPACE_ID || 'numanajmal0/Wan-Video-API';
+const HF_SPACE_HOST = process.env.HF_SPACE_HOST || HF_SPACE_ID.toLowerCase().replace(/_/g,'-').replace(/\//g,'-') + '.hf.space';
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
   .split(',').map(v=>v.trim()).filter(Boolean);
@@ -121,7 +122,7 @@ app.get('/api/health', (_req,res)=>res.json({
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
-  videoProvider:{name:'Leonardo Free Trial',configured:Boolean(LEONARDO_API_KEY),freeOnly:true,paidFallback:false},
+  videoProvider:{name:'Hugging Face ZeroGPU Wan',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID},
   authTransport:'ECDH-P256 + HKDF-SHA256 + AES-256-GCM',
   loginPolicy:{maxAttempts:MAX_LOGIN_ATTEMPTS,windowSeconds:LOGIN_WINDOW_MS/1000},
   startedAt,
@@ -286,9 +287,90 @@ app.get('/api/operations', requireAuth, (_req,res)=>{
 });
 
 
+const videoJobs = new Map<string,{status:'generating'|'done'|'failed';provider:string;videoUrl?:string;error?:string;taskId?:string}>();
+
+function hfSpaceBase(){ return `https://${HF_SPACE_HOST}`; }
+
+function normalizeVideoUrl(value:any):string|undefined{
+  const base=hfSpaceBase();
+  const walk=(v:any):string|undefined=>{
+    if(!v) return undefined;
+    if(typeof v==='string'){
+      if(/^https?:\/\//i.test(v) && /\.mp4(?:\?|$)/i.test(v)) return v;
+      if(v.startsWith('/') && /\.mp4(?:\?|$)/i.test(v)) return base+v;
+      return undefined;
+    }
+    if(Array.isArray(v)){ for(const item of v){const found=walk(item);if(found)return found;} return undefined; }
+    if(typeof v==='object'){
+      const direct=(v.url || v.video || v.video_url || v.path || v.name) as any;
+      const found=walk(direct); if(found) return found;
+      for(const val of Object.values(v)){const nested=walk(val);if(nested)return nested;}
+    }
+    return undefined;
+  };
+  return walk(value);
+}
+
+function buildHfInputs(parameters:any[],prompt:string){
+  return (parameters||[]).map((p:any)=>{
+    const label=String(p?.label||p?.parameter_name||p?.name||'').toLowerCase();
+    const example=p?.example_input ?? p?.default ?? p?.value;
+    if(label.includes('negative')) return example ?? '';
+    if(label.includes('prompt')) return prompt;
+    if(label.includes('seed')) return example ?? 0;
+    if(label.includes('duration') || label.includes('seconds')) return example ?? 3;
+    if(label.includes('fps')) return example ?? 16;
+    if(label.includes('step')) return example ?? 4;
+    if(label.includes('guidance') || label.includes('cfg')) return example ?? 1;
+    if(label.includes('width')) return example ?? 480;
+    if(label.includes('height')) return example ?? 832;
+    return example ?? null;
+  });
+}
+
+async function runHfVideo(jobId:string,prompt:string,taskId:string){
+  const job=videoJobs.get(jobId); if(!job) return;
+  const task=tasks.find(t=>t.id===taskId);
+  try{
+    const infoRes=await fetch(`${hfSpaceBase()}/gradio_api/info`,{headers:{accept:'application/json'}});
+    if(!infoRes.ok) throw new Error(`Space info HTTP ${infoRes.status}`);
+    const info:any=await infoRes.json();
+    const endpoints=info?.named_endpoints || {};
+    const entries=Object.entries(endpoints) as [string,any][];
+    const chosen=entries.find(([k])=>/generate.*video|video.*generate|text.*video|t2v/i.test(k)) || entries.find(([k])=>/generate|predict/i.test(k));
+    if(!chosen) throw new Error('No usable Gradio video endpoint found');
+    const [endpoint,meta]=chosen;
+    const apiName=endpoint.replace(/^\//,'');
+    const data=buildHfInputs(meta?.parameters||[],prompt);
+    const call=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}`,{
+      method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify({data})
+    });
+    if(!call.ok) throw new Error(`ZeroGPU queue HTTP ${call.status}`);
+    const queued:any=await call.json();
+    const eventId=String(queued?.event_id||'');
+    if(!eventId) throw new Error('ZeroGPU did not return an event id');
+    const stream=await fetch(`${hfSpaceBase()}/gradio_api/call/${encodeURIComponent(apiName)}/${encodeURIComponent(eventId)}`);
+    if(!stream.ok) throw new Error(`ZeroGPU result HTTP ${stream.status}`);
+    const text=await stream.text();
+    let videoUrl:string|undefined;
+    for(const line of text.split('\n')){
+      if(!line.startsWith('data:')) continue;
+      const raw=line.slice(5).trim();
+      try{ const payload=JSON.parse(raw); videoUrl=normalizeVideoUrl(payload) || videoUrl; }catch{}
+    }
+    if(!videoUrl) throw new Error('ZeroGPU completed without a real MP4 URL');
+    job.status='done'; job.videoUrl=videoUrl;
+    if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).driveUrl=videoUrl;(task as any).resultMessage='Complete — real MP4 generated by Hugging Face ZeroGPU';task.completedAt=new Date().toISOString();}
+  }catch(e:any){
+    job.status='failed'; job.error=String(e?.message||e||'ZeroGPU generation failed');
+    if(task){(task as any).phase='provider-error';(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).resultMessage=`ZeroGPU unavailable: ${job.error}`;}
+    console.error('Hugging Face ZeroGPU generation error',e);
+  }
+}
+
 app.get('/api/video/providers', requireAuth, (_req,res)=>{
-  res.json({freeOnly:true,paidFallback:false,providers:[
-    {id:'leonardo',name:'Leonardo Free Trial',configured:Boolean(LEONARDO_API_KEY),mode:'api',priority:1},
+  res.json({freeOnly:true,paidFallback:false,bestEffort:true,providers:[
+    {id:'hf-zerogpu',name:'Hugging Face ZeroGPU Wan',configured:true,mode:'api',priority:1,space:HF_SPACE_ID,note:'Free best-effort; queue/availability can change'},
     {id:'pixverse',name:'PixVerse Free',configured:false,mode:'manual',priority:2},
     {id:'runway',name:'Runway Free/Trial',configured:false,mode:'manual',priority:3}
   ]});
@@ -298,63 +380,22 @@ app.post('/api/video/generate', requireAuth, async (req:any,res)=>{
   const prompt=String(req.body?.prompt||'').trim();
   const taskId=String(req.body?.taskId||'').trim();
   if(!prompt) return res.status(400).json({error:'prompt is required'});
-  if(!LEONARDO_API_KEY){
-    const task=tasks.find(t=>t.id===taskId);
-    if(task){(task as any).provider='Free Video Router';(task as any).resultMessage='Leonardo Free Trial API key is not configured';}
-    return res.status(503).json({error:'Leonardo Free Trial API key is not configured',freeOnly:true,paidFallback:false});
-  }
-  try{
-    const r=await fetch('https://cloud.leonardo.ai/api/rest/v1/generations-text-to-video',{
-      method:'POST',
-      headers:{accept:'application/json','content-type':'application/json',authorization:`Bearer ${LEONARDO_API_KEY}`},
-      body:JSON.stringify({prompt,resolution:'RESOLUTION_480',model:'MOTION2FAST',frameInterpolation:false,isPublic:false,promptEnhance:true})
-    });
-    const text=await r.text();
-    let data:any={};
-    try{data=text?JSON.parse(text):{};}catch{data={raw:text};}
-    if(!r.ok){
-      addSecurityLog(req,'FAILED',req.auth?.user||'Admin',`Leonardo generation rejected with HTTP ${r.status}; no paid fallback used`);
-      return res.status(r.status===402?429:502).json({error:'Free Leonardo generation unavailable',provider:'Leonardo Free Trial',freeOnly:true,paidFallback:false,providerStatus:r.status});
-    }
-    const generationId=findGenerationId(data);
-    if(!generationId) return res.status(502).json({error:'Leonardo accepted the request but no generation id was returned',provider:'Leonardo Free Trial'});
-    const task=tasks.find(t=>t.id===taskId);
-    if(task){(task as any).provider='Leonardo Free Trial';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Real video generation started with Leonardo Free Trial';}
-    addSecurityLog(req,'SUCCESS',req.auth?.user||'Admin',`Kai started Leonardo video generation ${generationId}`);
-    return res.status(202).json({ok:true,provider:'Leonardo Free Trial',generationId,freeOnly:true,paidFallback:false});
-  }catch(e){
-    console.error('Leonardo generation error',e);
-    return res.status(502).json({error:'Unable to reach Leonardo API',provider:'Leonardo Free Trial',freeOnly:true,paidFallback:false});
-  }
+  const generationId=randomBytes(18).toString('hex');
+  videoJobs.set(generationId,{status:'generating',provider:'Hugging Face ZeroGPU Wan',taskId});
+  const task=tasks.find(t=>t.id===taskId);
+  if(task){(task as any).provider='Hugging Face ZeroGPU Wan';(task as any).providerJobId=generationId;(task as any).phase='generating';(task as any).resultMessage='Queued on Hugging Face ZeroGPU — free best-effort generation';}
+  void runHfVideo(generationId,prompt,taskId);
+  addSecurityLog(req,'SUCCESS',req.auth?.user||'Admin',`Kai queued Hugging Face ZeroGPU video ${generationId}`);
+  return res.status(202).json({ok:true,provider:'Hugging Face ZeroGPU Wan',generationId,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID});
 });
 
 app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
-  if(!LEONARDO_API_KEY) return res.status(503).json({error:'Leonardo Free Trial API key is not configured'});
   const generationId=String(req.params.generationId||'');
-  const taskId=String(req.query?.taskId||'');
-  try{
-    const r=await fetch(`https://cloud.leonardo.ai/api/rest/v1/generations/${encodeURIComponent(generationId)}`,{headers:{accept:'application/json',authorization:`Bearer ${LEONARDO_API_KEY}`}});
-    const text=await r.text();
-    let data:any={};
-    try{data=text?JSON.parse(text):{};}catch{data={raw:text};}
-    if(!r.ok) return res.status(502).json({error:'Unable to read Leonardo generation status',providerStatus:r.status});
-    const videoUrl=findMp4Url(data);
-    const rawStatus=String(data?.generations_by_pk?.status || data?.status || '').toUpperCase();
-    const failed=/FAIL|ERROR|CANCEL/.test(rawStatus);
-    const task=tasks.find(t=>t.id===taskId || (t as any).providerJobId===generationId);
-    if(videoUrl){
-      if(task){task.status='done';(task as any).phase='completed';(task as any).provider='Leonardo Free Trial';(task as any).driveUrl=videoUrl;(task as any).resultMessage='Complete — real MP4 generated by Leonardo Free Trial';task.completedAt=new Date().toISOString();}
-      return res.json({ok:true,status:'done',provider:'Leonardo Free Trial',videoUrl,generationId});
-    }
-    if(failed){
-      if(task){(task as any).phase='provider-error';(task as any).resultMessage='Leonardo free generation failed; no paid fallback used';}
-      return res.json({ok:false,status:'failed',provider:'Leonardo Free Trial',generationId});
-    }
-    return res.json({ok:true,status:'generating',provider:'Leonardo Free Trial',generationId});
-  }catch(e){
-    console.error('Leonardo status error',e);
-    return res.status(502).json({error:'Unable to reach Leonardo API'});
-  }
+  const job=videoJobs.get(generationId);
+  if(!job) return res.status(404).json({error:'Generation job not found'});
+  if(job.status==='done' && job.videoUrl) return res.json({ok:true,status:'done',provider:job.provider,videoUrl:job.videoUrl,generationId});
+  if(job.status==='failed') return res.json({ok:false,status:'failed',provider:job.provider,generationId,error:job.error});
+  return res.json({ok:true,status:'generating',provider:job.provider,generationId,bestEffort:true});
 });
 
 app.post('/api/manager/call/:agentId', requireAuth, (req,res)=>{
