@@ -4,8 +4,8 @@ export const cafeteriaPoint = { x: 75, y: 73 };
 
 export const agents = [
   { id:'manager', name:'Alex', role:'Manager', state:'working', position:{x:18,y:18}, home:{x:18,y:18} },
-  { id:'sysadmin', name:'Sam', role:'Senior System Administrator', state:'working', position:{x:20,y:43}, home:{x:20,y:43} },
-  { id:'security', name:'Mina', role:'Senior Security', state:'working', position:{x:42,y:43}, home:{x:42,y:43} },
+  { id:'sysadmin', name:'Sam', role:'Senior System Administrator', state:'working-task', position:{x:20,y:43}, home:{x:20,y:43}, currentTask:'Design marketplace access control using RBAC first and ABAC where needed' },
+  { id:'security', name:'Mina', role:'Senior Security', state:'working-task', position:{x:42,y:43}, home:{x:42,y:43}, currentTask:'Review authentication, authorization and monitoring security controls' },
   { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working-task', position:{x:65,y:43}, home:{x:65,y:43}, currentTask:'Evaluate free deployment platforms for frontend, API and Java backend' },
   { id:'qa', name:'Lina', role:'Senior Q/A', state:'working-task', position:{x:33,y:59}, home:{x:33,y:59}, currentTask:'Test frontend, backend and API separation plus marketplace smoke flow' },
   { id:'implement', name:'Kai', role:'Senior Implement', state:'working', position:{x:58,y:59}, home:{x:58,y:59} },
@@ -25,20 +25,46 @@ const leoTitles = [
   'Complete shopping cart, checkout and buyer order history',
   'Finish admin moderation, seller review and marketplace management',
   'Run responsive QA, validation, security checks and fix all defects',
-  'Deploy frontend and backend, verify production, document handoff and close project'
+  'Prepare release candidate for Lina, Mina and Noah review'
+];
+
+const samTitles = [
+  'Design marketplace access control using RBAC first and ABAC where needed',
+  'Define Buyer, Seller and Admin roles with least-privilege permissions',
+  'Define resource ownership rules for seller assets, profiles, orders and favorites',
+  'Document when ABAC is required beyond RBAC for ownerId, account status and resource state',
+  'Define access matrix for frontend routes and Java REST API endpoints',
+  'Review role assignment, privilege elevation and admin access process',
+  'Review logout/session revocation and disabled-account access behavior',
+  'Validate access-control implementation with Leo before QA handoff'
 ];
 
 const linaTitles = [
   'Test frontend, backend and API separation plus marketplace smoke flow',
   'Test React marketplace UI on desktop, tablet and mobile',
   'Test product detail, favorites, search, filters and sorting',
-  'Test signup, login, logout and buyer/seller/admin role access',
+  'Test signup, login, logout and Buyer/Seller/Admin role access',
+  'Test RBAC positive and negative authorization scenarios',
+  'Test ABAC/resource ownership rules if implemented',
   'Test seller upload, edit, delete and submit-for-review workflow',
   'Test Java backend and REST API endpoints including validation and error handling',
   'Test cart, checkout, order history and persistence',
   'Test admin approval, rejection and marketplace moderation',
   'Run regression testing after Leo fixes defects',
   'Run final production smoke test and confirm release readiness'
+];
+
+const minaTitles = [
+  'Review authentication, authorization and monitoring security controls',
+  'Review Sam access-control design for least privilege and separation of duties',
+  'Test unauthorized, cross-role and privilege-escalation scenarios',
+  'Test IDOR/resource ownership risks for seller assets, orders and profiles',
+  'Review API validation, CORS, security headers and error exposure',
+  'Review secrets, environment variables and repository for credential exposure',
+  'Define security audit events for login, failed login, role changes, seller changes, checkout and admin actions',
+  'Define monitoring alerts for authentication failures, suspicious access and 4xx/5xx spikes',
+  'Coordinate with Noah to integrate application/security logs into monitoring',
+  'Run final security verification and approve or block production release'
 ];
 
 const noahTitles = [
@@ -48,62 +74,34 @@ const noahTitles = [
   'Create or improve CI pipeline for frontend build and deployment',
   'Create or improve CI pipeline for Java backend and REST API',
   'Configure deployment health checks and rollback-safe release steps',
-  'Coordinate with Leo during integration and deployment changes',
-  'Coordinate with Lina for staging smoke tests and production verification',
-  'Deploy frontend, API and backend using approved free services',
+  'Prepare staging environment while Leo, Sam, Lina and Mina complete validation',
+  'Deploy frontend, API and backend after release candidate passes QA and security review',
+  'Integrate application/security logs and health metrics into monitoring with Mina',
   'Verify CI/CD from GitHub commit through production deployment',
   'Resolve deployment/runtime blockers or escalate to Alex when a decision is needed',
-  'Complete final deployment handoff with public URLs, health checks and operating notes'
+  'Complete final deployment handoff with public URLs, health checks, monitoring and operating notes'
 ];
 
-const leoTasks = leoTitles.map((title, index) => ({
-  id: `leo-marketplace-${index + 1}`,
+const mkTasks = (prefix:string, agentId:string, provider:string, titles:string[], offset:number, durationSec:number) => titles.map((title, index) => ({
+  id: `${prefix}-${index + 1}`,
   title,
-  agentId: 'developer',
+  agentId,
   status: 'active',
   phase: index === 0 ? 'working' : 'queued',
-  provider: 'Developer Workspace',
-  freeOnly: false,
-  durationSec: 3600,
-  createdAt: new Date(assignedAt + index * 1000).toISOString(),
+  provider,
+  freeOnly: provider.includes('Cloud'),
+  durationSec,
+  createdAt: new Date(assignedAt + offset + index * 1000).toISOString(),
   startedAt: index === 0 ? new Date(assignedAt).toISOString() : undefined,
-  resultMessage: index === 0
-    ? 'Leo is actively working on the AI Asset Marketplace. Remaining tasks are queued in delivery order.'
-    : 'Assigned to Leo and queued. Leo will continue automatically after the previous task is completed.'
+  resultMessage: index === 0 ? `${agentId} is actively working on this project responsibility.` : `Assigned and queued. Continue automatically after the previous task is completed.`
 }));
 
-const linaTasks = linaTitles.map((title, index) => ({
-  id: `lina-marketplace-${index + 1}`,
-  title,
-  agentId: 'qa',
-  status: 'active',
-  phase: index === 0 ? 'working' : 'queued',
-  provider: 'QA Workspace',
-  freeOnly: false,
-  durationSec: 2400,
-  createdAt: new Date(assignedAt + 100000 + index * 1000).toISOString(),
-  startedAt: index === 0 ? new Date(assignedAt).toISOString() : undefined,
-  resultMessage: index === 0
-    ? 'Lina is actively testing the AI Asset Marketplace. She will report defects for Leo to fix and continue through the QA queue.'
-    : 'Assigned to Lina and queued. Lina will continue automatically after the previous QA task is completed.'
-}));
+const leoTasks = mkTasks('leo-marketplace','developer','Developer Workspace',leoTitles,0,3600);
+const samTasks = mkTasks('sam-marketplace','sysadmin','Access Control Workspace',samTitles,50000,2400);
+const linaTasks = mkTasks('lina-marketplace','qa','QA Workspace',linaTitles,100000,2400);
+const minaTasks = mkTasks('mina-marketplace','security','Security Review Workspace',minaTitles,150000,2700);
+const noahTasks = mkTasks('noah-marketplace','cloud','Cloud / CI-CD Workspace',noahTitles,200000,2700);
 
-const noahTasks = noahTitles.map((title, index) => ({
-  id: `noah-marketplace-${index + 1}`,
-  title,
-  agentId: 'cloud',
-  status: 'active',
-  phase: index === 0 ? 'working' : 'queued',
-  provider: 'Cloud / CI-CD Workspace',
-  freeOnly: true,
-  durationSec: 2700,
-  createdAt: new Date(assignedAt + 200000 + index * 1000).toISOString(),
-  startedAt: index === 0 ? new Date(assignedAt).toISOString() : undefined,
-  resultMessage: index === 0
-    ? 'Noah is actively evaluating free deployment options and owns CI/CD coordination through successful production release.'
-    : 'Assigned to Noah and queued. Noah will continue automatically and coordinate deployment with Leo and Lina.'
-}));
-
-export const tasks:any[] = [...leoTasks, ...linaTasks, ...noahTasks];
+export const tasks:any[] = [...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks];
 
 export const startedAt = new Date().toISOString();
