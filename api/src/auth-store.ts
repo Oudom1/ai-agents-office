@@ -30,6 +30,19 @@ export async function verifyAdminPassword(username:string,password:string,fallba
   return Boolean(fallbackPassword) && safeEqual(username,fallbackUsername) && safeEqual(password,fallbackPassword);
 }
 
+export async function createAppUser(username:string,password:string){
+  if(!pool) throw new Error('Database is not configured');
+  const salt=randomBytes(24).toString('hex');
+  const hash=scryptSync(password,salt,64).toString('hex');
+  try{
+    await pool.query(`INSERT INTO app_users(username,role,is_active,password_hash,password_salt,password_updated_at,updated_at)
+      VALUES($1,'user',true,$2,$3,now(),now())`,[username,hash,salt]);
+  }catch(e:any){
+    if(e?.code==='23505') throw new Error('USER_EXISTS');
+    throw e;
+  }
+}
+
 export async function resetAdminPassword(username:string,newPassword:string){
   if(!pool) throw new Error('Database is not configured');
   const salt=randomBytes(24).toString('hex');
