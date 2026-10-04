@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: python scripts/patch_kai_complete_pipeline.py
+      - run: python scripts/patch_kai_complete_pipeline_v2.py
       - run: npm install
       - run: npm run build -w api
       - run: npm run build -w frontend
