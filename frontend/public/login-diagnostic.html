@@ -1,8 +1,8 @@
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Office Secure Login</title><style>body{font-family:Arial,sans-serif;background:#07121d;color:#e8f4fb;margin:0;padding:24px}.card{max-width:720px;margin:auto;background:#0b1b2a;border:1px solid #294b62;border-radius:14px;padding:20px}.ok{color:#7ee2a8}.bad{color:#ff9ea8}.muted{color:#91adbe}button{padding:10px 14px;border-radius:8px;border:1px solid #3d6f8a;background:#123b52;color:#fff;font-weight:700;cursor:pointer;margin-right:8px}input{box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #294b62;background:#06101a;color:#fff;margin:5px 0 12px;pointer-events:auto;user-select:text}pre{white-space:pre-wrap;background:#06101a;border-radius:8px;padding:12px}</style></head>
-<body><div class="card"><h2>AI Agents Office Secure Login</h2><p class="muted">This page uses the same verified encrypted login path as the office. After a successful login it stores the returned session token in this browser tab and opens the office automatically.</p><button id="run">Run Transport Verification</button><pre id="out">Ready.</pre><hr style="border:0;border-top:1px solid #294b62;margin:18px 0"><h3>Login & Open Office</h3><label>Admin name</label><input id="user" value="Admin" autocomplete="username"><label>Password</label><input id="pass" type="password" autocomplete="current-password" placeholder="Enter password"><button id="login">Secure Login & Open Office</button><pre id="loginout">Not tested yet.</pre></div><script>
-const API='https://ai-agents-office-api.onrender.com/api';
+<body><div class="card"><h2>AI Agents Office Secure Login</h2><p class="muted">Connected to the Railway backend. After a successful encrypted login, the returned session token is stored in this browser tab and the office opens automatically.</p><button id="run">Run Transport Verification</button><pre id="out">Ready.</pre><hr style="border:0;border-top:1px solid #294b62;margin:18px 0"><h3>Login & Open Office</h3><label>Admin name</label><input id="user" value="Admin" autocomplete="username"><label>Password</label><input id="pass" type="password" autocomplete="current-password" placeholder="Enter password"><button id="login">Secure Login & Open Office</button><pre id="loginout">Not tested yet.</pre></div><script>
+const API='https://ai-agents-office-production.up.railway.app/api';
 const TOKEN_KEY='ai-office-auth-token-v1';
 const USER_KEY='ai-office-auth-user-v1';
 const out=document.getElementById('out');
@@ -11,7 +11,7 @@ const b64ToBytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const bytesToB64=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
 async function transportTest(){
   const lines=[]; const add=(s)=>{lines.push(s);out.textContent=lines.join('\n')};
-  try{add('1) Testing backend health...');const r=await fetch(API+'/health',{cache:'no-store'});const j=await r.json();add(r.ok&&j.ok?'PASS: backend health reachable':'FAIL: backend health returned '+r.status);}catch(e){add('FAIL: backend health error: '+e.message);return false}
+  try{add('1) Testing Railway backend health...');const r=await fetch(API+'/health',{cache:'no-store'});const j=await r.json();add(r.ok&&j.ok?'PASS: Railway backend health reachable':'FAIL: backend health returned '+r.status);}catch(e){add('FAIL: backend health error: '+e.message);return false}
   try{add('2) Testing secure handshake...');const r=await fetch(API+'/auth/handshake',{method:'POST',cache:'no-store'});const j=await r.json();add(r.ok&&j.handshakeId&&j.serverPublicKey?'PASS: secure handshake reachable':'FAIL: handshake returned '+r.status+' '+(j.error||''));}catch(e){add('FAIL: handshake error: '+e.message);return false}
   try{add('3) Testing Web Crypto...');if(!window.crypto?.subtle)throw new Error('Web Crypto unavailable');await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);add('PASS: browser supports ECDH P-256');}catch(e){add('FAIL: browser crypto error: '+e.message);return false}
   add('RESULT: Browser transport is healthy.');return true;
@@ -42,7 +42,7 @@ async function loginAndOpen(){
     add('1) Building encrypted login payload...');
     const encrypted=await buildEncryptedPayload(username,password);
     add('PASS: encrypted payload created.');
-    add('2) Sending encrypted login...');
+    add('2) Sending encrypted login to Railway...');
     const r=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(encrypted),cache:'no-store'});
     const data=await r.json().catch(()=>({}));
     if(!r.ok){add('FAIL: '+(data.error||('HTTP '+r.status)));return}
