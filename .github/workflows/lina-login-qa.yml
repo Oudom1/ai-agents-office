@@ -1,0 +1,37 @@
+name: Lina Login QA
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  live-login-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install playwright@1.52.0
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for GitHub Pages
+        run: sleep 45
+      - name: Test live login page
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage();
+            await page.goto('https://oudom1.github.io/ai-agents-office/?v=loginfix', {waitUntil:'domcontentloaded', timeout:90000});
+            const btn=page.locator('#login-btn');
+            if(await btn.count()!==1) throw new Error('Login button not found');
+            if(await btn.isDisabled()) throw new Error('Login button disabled');
+            await page.waitForTimeout(1200);
+            if(await btn.isDisabled()) throw new Error('Login button became stuck');
+            const user=page.locator('#login-user');
+            if(await user.inputValue()==='') throw new Error('Username field empty/unusable');
+            const msg=await page.locator('#login-msg').innerText();
+            console.log('LINA_LOGIN_QA_PASS:', msg);
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
