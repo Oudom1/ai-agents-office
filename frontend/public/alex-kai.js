@@ -78,8 +78,8 @@
     if (!(panel instanceof HTMLElement) || document.getElementById('kai-provider-status')) return;
     const box = document.createElement('div');
     box.id = 'kai-provider-status';
-    box.innerHTML = `<b style="color:#8fdcff">FREE VIDEO ROUTER</b><br><span>PixVerse priority → HeyGen → OpenArt → Runway → Descript / Adobe Express</span><br><span style="color:#ffb4bd">Current connected providers cannot produce a free MP4 right now.</span><br><span style="color:#8ba6ba">Kai will not mark a video complete until a real MP4 exists.</span>`;
-    Object.assign(box.style,{margin:'8px 0',padding:'8px',borderRadius:'8px',border:'1px solid #365f73',background:'#102532',color:'#d5edf8',fontSize:'9px',lineHeight:'1.45'});
+    box.innerHTML = `<b style="color:#8fdcff">REMOTION VIDEO ENGINE</b><br><span>Remotion only — React timeline, scenes, captions, motion and MP4 rendering.</span><br><span style="color:#9ef5ff">Kai target: full 60-second comedy composition (1800 frames @ 30fps).</span><br><span style="color:#8ba6ba">No PixVerse, HeyGen, OpenArt, Runway, ZeroGPU or other video provider fallback.</span>`;
+    Object.assign(box.style,{margin:'8px 0',padding:'8px',borderRadius:'8px',border:'1px solid #365f73',background:'#102532',color:'#d5edf8',fontSize:'9px',lineHeight:1.45});
     const note = panel.querySelector('.kai-note');
     note?.insertAdjacentElement('afterend', box);
   }
