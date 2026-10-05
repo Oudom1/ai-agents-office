@@ -11,19 +11,36 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Check backend health
+      - name: Check backend health from GitHub Pages origin
         run: |
           set -euo pipefail
           curl --fail --show-error --silent --max-time 90 \
+            -H 'Origin: https://oudom1.github.io' \
+            -D /tmp/health.headers \
             https://ai-agents-office-api.onrender.com/api/health \
             | tee /tmp/health.json
           grep -q '"ok":true' /tmp/health.json
+          grep -qi 'access-control-allow-origin: https://oudom1.github.io' /tmp/health.headers
       - name: Check secure handshake endpoint
         run: |
           set -euo pipefail
           curl --fail --show-error --silent --max-time 90 \
+            -H 'Origin: https://oudom1.github.io' \
             -X POST https://ai-agents-office-api.onrender.com/api/auth/handshake \
             | tee /tmp/handshake.json
           grep -q '"handshakeId"' /tmp/handshake.json
           grep -q '"serverPublicKey"' /tmp/handshake.json
           grep -q '"challenge"' /tmp/handshake.json
+      - name: Check browser login preflight
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 90 \
+            -X OPTIONS \
+            -H 'Origin: https://oudom1.github.io' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            -D /tmp/preflight.headers \
+            -o /dev/null \
+            https://ai-agents-office-api.onrender.com/api/auth/login
+          grep -qi 'access-control-allow-origin: https://oudom1.github.io' /tmp/preflight.headers
+          grep -qi 'access-control-allow-methods:.*POST' /tmp/preflight.headers
