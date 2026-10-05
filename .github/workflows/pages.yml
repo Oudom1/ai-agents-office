@@ -23,7 +23,10 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm run build -w frontend
+      - name: Build frontend
+        run: npm run build -w frontend
+        env:
+          VITE_API_URL: https://ai-agents-office-production.up.railway.app
       - name: Add Leo portfolio site
         run: cp -r portfolio frontend/dist/portfolio
       - uses: actions/configure-pages@v5
