@@ -2,11 +2,13 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>AI Agents Office</title>
+  <link rel="stylesheet" href="./modern-office.css?v=20261006-3" />
+  <link rel="stylesheet" href="./mobile-performance-fix.css?v=20261006-1" />
   <style>
     html,body{min-height:100%;margin:0;background:#06111d;color:#e8f4fb;overflow-y:auto}
     #session-check{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,#10354b 0,#06111d 45%,#030911 100%);font-family:Inter,Segoe UI,Arial,sans-serif}
@@ -17,6 +19,7 @@
     #session-actions button{border:1px solid #32627d;background:#0d3147;color:#e8f4fb;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer}
     #session-actions button.primary{background:#1477b8;border-color:#2aa8e8}
     .agent.state-working .bubble{display:none!important}
+    .office-paused *{animation-play-state:paused!important}
   </style>
 </head>
 <body>
@@ -33,6 +36,7 @@
   <div id="root"></div>
 
   <script src="./api-timeout-guard.js?v=20261006-1"></script>
+  <script src="./mobile-performance-fix.js?v=20261006-1"></script>
   <script type="module">
     (async()=>{
       const API='https://ai-agents-office-production.up.railway.app/api';
@@ -67,6 +71,7 @@
           const addScript=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.body.appendChild(s);};
           addScript('./alex-kai.js?v=20261006-1');
           addScript('./result-duration.js?v=20261006-1');
+          addScript('./office-logs.js?v=20261006-1');
         }catch(e){
           const text=String(e?.message||e||'');
           const timedOut=/abort|respond within|timeout/i.test(text);
