@@ -1,0 +1,57 @@
+/* Responsive + performance overrides for AI Agents Office */
+html,body{max-width:100%;overflow-x:hidden!important}
+*{min-width:0}
+main{width:100%;min-width:0}
+.office-card{min-width:0!important;width:100%}
+.office{min-width:0!important;width:100%!important;max-width:100%;aspect-ratio:16/10}
+aside{min-width:0;width:100%}
+.panel{min-width:0;overflow-wrap:anywhere}
+.tasks-panel,.results-panel{content-visibility:auto;contain-intrinsic-size:600px}
+.agent-row,.task-card,.result-card{content-visibility:auto;contain-intrinsic-size:80px}
+
+/* Lighter rendering on phones/tablets */
+@media(max-width:900px){
+  .app{padding:10px!important;max-width:100%!important;overflow:hidden}
+  header{position:relative!important;top:auto!important;margin:-10px -10px 10px!important;padding:12px!important;backdrop-filter:none!important}
+  header{flex-wrap:wrap;gap:8px}
+  header h1{font-size:18px!important}
+  .header-actions{width:100%;justify-content:flex-start}
+  main{display:block!important;width:100%!important}
+  .office-card{position:relative!important;top:auto!important;padding:6px!important;border-radius:12px!important;overflow:hidden!important}
+  .office{min-width:0!important;width:100%!important;aspect-ratio:4/5!important;border-radius:10px!important;background-size:18px 18px!important}
+  aside{display:flex!important;flex-direction:column!important;gap:10px!important;margin-top:10px!important;width:100%!important}
+  .panel{padding:12px!important;border-radius:12px!important}
+  .tasks-panel,.results-panel{max-height:320px!important;overflow:auto!important;-webkit-overflow-scrolling:touch}
+  .avatar{width:30px!important;height:30px!important;border-radius:10px!important;box-shadow:0 0 0 2px rgba(5,14,24,.7)!important}
+  .avatar:before{font-size:17px!important}
+  .agent small{font-size:7px!important;padding:2px 4px!important;margin-top:2px!important}
+  .bubble{display:none!important}
+  .task-progress{transform:scale(.72);transform-origin:top center;margin-top:0!important}
+  .desk{border-width:1px!important;box-shadow:none!important}
+  .monitor{box-shadow:none!important}
+  .room{box-shadow:none!important;border-radius:8px!important}
+  .room span{font-size:7px!important;left:6px!important;top:6px!important}
+  .sofa,.coffee,.table{transform:scale(.72);transform-origin:center}
+  button,select,input{font-size:14px;min-height:42px}
+}
+
+/* Very small phones: prioritize controls and readable status */
+@media(max-width:560px){
+  .office{aspect-ratio:3/4!important}
+  .manager-room,.task-room,.active-room{height:22%!important}
+  .ops-room{top:29%!important;height:36%!important}
+  .lounge-room,.cafe-room{top:67%!important;height:29%!important}
+  .panel-title{align-items:flex-start;flex-wrap:wrap}
+  .row{grid-template-columns:1fr!important}
+  .template-grid{grid-template-columns:1fr!important}
+  .skill-tags{gap:4px!important}
+  .skill-tags span{font-size:7px!important;padding:4px 5px!important}
+  .task-card,.result-card{padding:9px!important;margin:6px 0!important}
+}
+
+/* Reduce expensive visual effects and motion on constrained devices */
+@media(max-width:900px),(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.12s!important}
+  .office-card,.panel,.agent,.avatar,.task-lights i.on,.timer-bar i{filter:none!important;box-shadow:none!important}
+  body{background-image:none!important}
+}
