@@ -1,5 +1,5 @@
 (()=>{
-  const API_PREFIX='https://ai-agents-office-api.onrender.com/api';
+  const API_PREFIX='https://ai-agents-office-production.up.railway.app/api';
   const TOKEN_KEY='ai-office-auth-token-v1';
   const originalFetch=window.fetch.bind(window);
   const DEFAULT_TIMEOUT_MS=30000;
@@ -35,7 +35,7 @@
     }catch(err){
       if(controller.signal.aborted){
         const seconds=Math.round(timeoutMs/1000);
-        throw new Error(`AI Agents Office API did not respond within ${seconds} seconds. The backend may still be waking up; please retry once.`);
+        throw new Error(`AI Agents Office API did not respond within ${seconds} seconds. Please retry once.`);
       }
       throw err;
     }finally{
