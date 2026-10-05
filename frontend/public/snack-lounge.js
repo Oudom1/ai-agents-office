@@ -11,6 +11,7 @@
     const style=document.createElement('style');
     style.id=STYLE_ID;
     style.textContent=`
+      .office > .sofa,.office > .coffee,.office > .table{display:none!important}
       #${LOUNGE_ID}{position:absolute;left:4.5%;top:72.7%;width:40.5%;height:19.5%;z-index:3;pointer-events:none;font-family:Inter,Segoe UI,Arial,sans-serif}
       #${CAFE_ID}{position:absolute;left:51.5%;top:72.7%;width:43.5%;height:19.5%;z-index:3;pointer-events:none;font-family:Inter,Segoe UI,Arial,sans-serif}
       .lounge-sofa{position:absolute;left:3%;bottom:5%;width:39%;height:42%;filter:drop-shadow(0 5px 5px rgba(0,0,0,.28))}
