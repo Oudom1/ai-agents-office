@@ -1,7 +1,7 @@
 (()=>{
   const API_PREFIX='https://ai-agents-office-api.onrender.com/api';
   const originalFetch=window.fetch.bind(window);
-  const DEFAULT_TIMEOUT_MS=45000;
+  const DEFAULT_TIMEOUT_MS=5000;
 
   window.fetch=async function(input,init={}){
     let url='';
@@ -24,7 +24,7 @@
       return await originalFetch(input,{...init,signal:controller.signal});
     }catch(err){
       if(controller.signal.aborted){
-        throw new Error('AI Agents Office API is taking too long to respond. The backend may be waking up. Please wait a few seconds and try again.');
+        throw new Error('AI Agents Office API did not respond within 5 seconds. Please retry; the backend may be waking up.');
       }
       throw err;
     }finally{
