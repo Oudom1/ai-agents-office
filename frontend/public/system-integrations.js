@@ -2,7 +2,7 @@
   const PANEL_ID='system-integrations-panel';
   const STYLE_ID='system-integrations-style';
   const TOKEN_KEY='ai-office-auth-token-v1';
-  const API='https://ai-agents-office-api.onrender.com/api';
+  const API='https://ai-agents-office-production.up.railway.app/api';
 
   function addStyle(){
     if(document.getElementById(STYLE_ID)) return;
@@ -32,7 +32,7 @@
     {icon:'⌨️',name:'Typing Tool',desc:'External typing utility used by QA',status:'AVAILABLE',statusClass:'online',href:'https://typing-tool-pu0o.onrender.com'},
     {icon:'🌐',name:'Portfolio',desc:'Leo portfolio project site',status:'AVAILABLE',statusClass:'online',href:'./portfolio/'},
     {icon:'🐙',name:'GitHub Repository',desc:'Source code, commits and deployments',status:'CONNECTED',statusClass:'online',href:'https://github.com/Oudom1/ai-agents-office'},
-    {icon:'⚙️',name:'Backend API',desc:'AI Office task and agent API',status:'CHECKING',statusClass:'warn',href:null,id:'backend'},
+    {icon:'⚙️',name:'Backend API',desc:'AI Office task and agent API on Railway',status:'CHECKING',statusClass:'warn',href:null,id:'backend'},
     {icon:'🎬',name:'Kai Video Provider',desc:'Hugging Face ZeroGPU LTX video route',status:'INTEGRATED',statusClass:'online',href:null},
     {icon:'📁',name:'Google Drive',desc:'Final video/result upload target',status:'WHEN CONFIGURED',statusClass:'warn',href:'https://drive.google.com/'}
   ];
