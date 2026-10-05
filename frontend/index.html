@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>AI Agents Office</title>
   <style>
     html,body{min-height:100%;margin:0;background:#06111d;color:#e8f4fb}
@@ -14,7 +17,8 @@
     #login-card{width:min(430px,94vw);background:#091827;border:1px solid #244761;border-radius:16px;padding:22px;box-shadow:0 28px 70px rgba(0,0,0,.5)}
     #login-msg{min-height:28px;font-size:10px;line-height:1.4;color:#9fc3d5;margin:4px 0 8px}
     #login-btn{width:100%;padding:10px;border-radius:8px;border:1px solid #2b6d87;background:#123d55;color:#e9f8ff;font-weight:900;cursor:pointer}
-    #login-btn:disabled{opacity:.6;cursor:wait}
+    #login-btn:disabled{opacity:.65;cursor:wait}
+    #login-retry{display:none;width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid #35566b;background:#091827;color:#9fc3d5;cursor:pointer}
     @media(max-width:800px){.office-nav-links{position:static;padding:8px 12px;background:#071421;justify-content:flex-end;flex-wrap:wrap}}
   </style>
 </head>
@@ -24,13 +28,14 @@
       <div style="font-size:10px;letter-spacing:1px;color:#66dbe8;font-weight:900">AI AGENTS OFFICE SECURITY</div>
       <h2 style="margin:7px 0 5px;font-size:20px">Secure Access Required</h2>
       <p style="font-size:10px;line-height:1.5;color:#7f9fb1;margin:0 0 14px">Credentials are protected with ECDH P-256, HKDF-SHA-256 and AES-256-GCM before server verification.</p>
-      <label style="font-size:9px;color:#9fc3d5">Admin name</label>
+      <label style="font-size:9px;color:#9fc3d5">Username</label>
       <input id="login-user" autocomplete="username" value="Admin" style="box-sizing:border-box;width:100%;margin:5px 0 10px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none">
       <label style="font-size:9px;color:#9fc3d5">Password</label>
-      <input id="login-pass" type="password" autocomplete="current-password" placeholder="Enter server password" style="box-sizing:border-box;width:100%;margin:5px 0 7px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none">
-      <div id="login-msg">Checking backend availability…</div>
-      <button id="login-btn">Secure Key Exchange & Unlock</button>
-      <div style="margin-top:10px;font-size:8px;line-height:1.4;color:#63869a">The page warms the backend first, then performs the encrypted handshake and login.</div>
+      <input id="login-pass" type="password" autocomplete="current-password" placeholder="Enter password" style="box-sizing:border-box;width:100%;margin:5px 0 7px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff;outline:none">
+      <div id="login-msg">Enter your username and password.</div>
+      <button id="login-btn" type="button">Secure Key Exchange & Unlock</button>
+      <button id="login-retry" type="button">Retry backend check</button>
+      <div style="margin-top:10px;font-size:8px;line-height:1.4;color:#63869a">Login never waits indefinitely. If the free backend is waking up, retry after a few seconds.</div>
     </div>
   </div>
 
@@ -41,7 +46,7 @@
   </div>
   <div id="root"></div>
 
-  <script src="./api-timeout-guard.js?v=20261005-10"></script>
+  <script src="./api-timeout-guard.js?v=20261005-11"></script>
   <script>
     (()=>{
       const API='https://ai-agents-office-api.onrender.com/api';
@@ -52,20 +57,31 @@
       const pass=document.getElementById('login-pass');
       const msg=document.getElementById('login-msg');
       const button=document.getElementById('login-btn');
+      const retry=document.getElementById('login-retry');
       user.value=sessionStorage.getItem(USER_KEY)||'Admin';
       const b64ToBytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
       const bytesToB64=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-      async function warmBackend(){
-        msg.textContent='Checking backend availability…';
+      async function timedFetch(url,init={},timeoutMs=12000){
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),timeoutMs);
+        try{return await fetch(url,{...init,signal:controller.signal})}
+        catch(e){if(controller.signal.aborted)throw new Error('Backend response timed out. Please retry.');throw e}
+        finally{clearTimeout(timer)}
+      }
+
+      async function warmBackend(show=true){
+        if(show)msg.textContent='Checking backend availability…';
         try{
-          const r=await fetch(`${API}/health`,{cache:'no-store'});
+          const r=await timedFetch(`${API}/health`,{cache:'no-store'},10000);
           if(!r.ok)throw new Error(`Backend health returned HTTP ${r.status}`);
           const h=await r.json().catch(()=>({}));
-          msg.textContent=h.authConfigured===false?'Backend is online but authentication is not configured.':'Backend ready. Enter your password.';
-          return r.ok;
+          if(show)msg.textContent=h.authConfigured===false?'Backend is online but authentication is not configured.':'Backend ready. Enter your password.';
+          retry.style.display='none';
+          return true;
         }catch(e){
-          msg.textContent=e?.message||'Backend is still waking up. You can retry login shortly.';
+          if(show)msg.textContent=e?.message||'Backend is waking up. Retry in a few seconds.';
+          retry.style.display='block';
           return false;
         }
       }
@@ -89,7 +105,7 @@
 
       async function buildEncryptedPayload(username,password){
         msg.textContent='Starting secure key exchange…';
-        const hsRes=await fetch(`${API}/auth/handshake`,{method:'POST',cache:'no-store'});
+        const hsRes=await timedFetch(`${API}/auth/handshake`,{method:'POST',cache:'no-store'},12000);
         const hs=await hsRes.json().catch(()=>({}));
         if(!hsRes.ok)throw new Error(hs.error||`Handshake failed (HTTP ${hsRes.status})`);
         const keyPair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
@@ -109,8 +125,8 @@
         const token=sessionStorage.getItem(TOKEN_KEY)||'';
         if(!token)return false;
         try{
-          const r=await fetch(`${API}/auth/status`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
-          if(!r.ok)throw new Error();
+          const r=await timedFetch(`${API}/auth/status`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'},7000);
+          if(!r.ok)throw new Error('Session expired');
           installAuthFetch();
           shell.remove();
           return true;
@@ -122,13 +138,12 @@
 
       async function submit(){
         const username=user.value.trim(),password=pass.value;
-        if(!username||!password){msg.textContent='Enter the approved admin name and password.';return}
-        button.disabled=true;button.textContent='Connecting…';
+        if(!username||!password){msg.textContent='Enter your username and password.';return}
+        button.disabled=true;button.textContent='Connecting…';retry.style.display='none';
         try{
-          await warmBackend();
           const encrypted=await buildEncryptedPayload(username,password);
           msg.textContent='Verifying encrypted login…';button.textContent='Verifying…';
-          const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(encrypted),cache:'no-store'});
+          const r=await timedFetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(encrypted),cache:'no-store'},12000);
           const data=await r.json().catch(()=>({}));
           if(!r.ok)throw new Error(data.error||`Login failed (HTTP ${r.status})`);
           sessionStorage.setItem(TOKEN_KEY,data.token);
@@ -138,6 +153,7 @@
           shell.remove();
         }catch(e){
           msg.textContent=e?.message||'Secure authentication failed.';
+          retry.style.display='block';
           pass.value='';
         }finally{
           button.disabled=false;button.textContent='Secure Key Exchange & Unlock';
@@ -145,8 +161,15 @@
       }
 
       button.addEventListener('click',submit);
+      retry.addEventListener('click',()=>warmBackend(true));
       pass.addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
-      (async()=>{if(await restoreSession())return;await warmBackend();setTimeout(()=>pass.focus(),50)})();
+      (async()=>{
+        const restored=await restoreSession();
+        if(restored)return;
+        msg.textContent='Enter your username and password.';
+        setTimeout(()=>pass.focus(),50);
+        warmBackend(false);
+      })();
     })();
   </script>
 
