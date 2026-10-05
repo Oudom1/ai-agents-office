@@ -32,37 +32,111 @@
     <a href="./create-user.html">Create User</a>
   </div>
   <div id="root"></div>
+
   <script>
     (()=>{
+      const API='https://ai-agents-office-api.onrender.com/api';
+      const TOKEN_KEY='ai-office-auth-token-v1';
+      const USER_KEY='ai-office-auth-user-v1';
+      const b64ToBytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+      const bytesToB64=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
       const boot=()=>document.getElementById('boot-status');
       const msg=()=>document.getElementById('boot-msg');
       const reload=()=>document.getElementById('boot-reload');
-      const hideIfReady=()=>{
-        const gate=document.getElementById('ai-security-gate');
-        const root=document.getElementById('root');
-        if(gate || (root && root.childElementCount>0)) boot()?.remove();
-      };
-      window.addEventListener('error',()=>{if(msg()) msg().textContent='Frontend startup error detected. Retrying secure login…';});
-      window.addEventListener('unhandledrejection',()=>{if(msg()) msg().textContent='A startup request failed. Retrying secure login…';});
-      const timer=setInterval(()=>{hideIfReady();if(!boot())clearInterval(timer)},250);
+
+      function installAuthFetch(){
+        if(window.__aiOfficeInlineAuthFetch)return;
+        window.__aiOfficeInlineAuthFetch=true;
+        const baseFetch=window.fetch.bind(window);
+        window.fetch=(input,init={})=>{
+          let url='';
+          try{url=typeof input==='string'?input:input instanceof URL?input.href:input.url||''}catch{}
+          if(url.startsWith(API)){
+            const headers=new Headers(init.headers || (input instanceof Request?input.headers:undefined) || {});
+            const token=sessionStorage.getItem(TOKEN_KEY)||'';
+            if(token)headers.set('Authorization',`Bearer ${token}`);
+            return baseFetch(input,{...init,headers});
+          }
+          return baseFetch(input,init);
+        };
+      }
+
+      async function securePayload(username,password){
+        const hsRes=await fetch(`${API}/auth/handshake`,{method:'POST'});
+        const hs=await hsRes.json().catch(()=>({}));
+        if(!hsRes.ok)throw new Error(hs.error||'Unable to start secure login.');
+        const keyPair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
+        const serverKey=await crypto.subtle.importKey('raw',b64ToBytes(hs.serverPublicKey),{name:'ECDH',namedCurve:'P-256'},false,[]);
+        const sharedBits=await crypto.subtle.deriveBits({name:'ECDH',public:serverKey},keyPair.privateKey,256);
+        const hkdfBase=await crypto.subtle.importKey('raw',sharedBits,'HKDF',false,['deriveKey']);
+        const aesKey=await crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:b64ToBytes(hs.challenge),info:new TextEncoder().encode('ai-agents-office-auth-v1')},hkdfBase,{name:'AES-GCM',length:256},false,['encrypt']);
+        const clientPublicRaw=await crypto.subtle.exportKey('raw',keyPair.publicKey);
+        const iv=crypto.getRandomValues(new Uint8Array(12));
+        const payload=new TextEncoder().encode(JSON.stringify({username,password,challenge:hs.challenge,issuedAt:Date.now()}));
+        const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:new TextEncoder().encode(hs.handshakeId),tagLength:128},aesKey,payload);
+        const all=new Uint8Array(encrypted);
+        return {handshakeId:hs.handshakeId,clientPublicKey:bytesToB64(clientPublicRaw),iv:bytesToB64(iv),ciphertext:bytesToB64(all.slice(0,-16)),tag:bytesToB64(all.slice(-16))};
+      }
+
+      function showInlineLogin(note=''){
+        if(document.getElementById('ai-security-gate'))return;
+        boot()?.remove();
+        const overlay=document.createElement('div');
+        overlay.id='ai-inline-security-gate';
+        overlay.style.cssText='position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 50% 0,#10354b 0,#06111d 45%,#030911 100%);font-family:Inter,Segoe UI,Arial,sans-serif;color:#e8f4fb';
+        overlay.innerHTML=`<div style="width:min(430px,94vw);background:#091827;border:1px solid #244761;border-radius:16px;padding:22px;box-shadow:0 28px 70px rgba(0,0,0,.5)"><div style="font-size:10px;letter-spacing:1px;color:#66dbe8;font-weight:900">AI AGENTS OFFICE SECURITY</div><h2 style="margin:7px 0 5px;font-size:20px">Secure Access Required</h2><p style="font-size:10px;line-height:1.5;color:#7f9fb1;margin:0 0 14px">Enter your approved admin credentials.</p><label style="font-size:9px;color:#9fc3d5">Admin name</label><input id="inline-user" autocomplete="username" value="${sessionStorage.getItem(USER_KEY)||'Admin'}" style="box-sizing:border-box;width:100%;margin:5px 0 10px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff"><label style="font-size:9px;color:#9fc3d5">Password</label><input id="inline-pass" type="password" autocomplete="current-password" style="box-sizing:border-box;width:100%;margin:5px 0 7px;padding:10px;border-radius:8px;border:1px solid #284b61;background:#06121d;color:#fff"><div id="inline-msg" style="min-height:22px;font-size:9px;color:#ff9eaa">${note}</div><button id="inline-login" style="width:100%;padding:10px;border-radius:8px;border:1px solid #2b6d87;background:#123d55;color:#e9f8ff;font-weight:900;cursor:pointer">Secure Login</button></div>`;
+        document.body.appendChild(overlay);
+        const button=overlay.querySelector('#inline-login');
+        const user=overlay.querySelector('#inline-user');
+        const pass=overlay.querySelector('#inline-pass');
+        const status=overlay.querySelector('#inline-msg');
+        const submit=async()=>{
+          if(!user.value.trim()||!pass.value){status.textContent='Enter username and password.';return}
+          button.disabled=true;button.textContent='Connecting…';status.textContent='Waking secure backend if needed…';
+          try{
+            const encrypted=await securePayload(user.value.trim(),pass.value);
+            button.textContent='Verifying…';
+            const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(encrypted)});
+            const data=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(data.error||'Access denied.');
+            sessionStorage.setItem(TOKEN_KEY,data.token);sessionStorage.setItem(USER_KEY,data.user||user.value.trim());
+            installAuthFetch();overlay.remove();location.reload();
+          }catch(e){status.textContent=e?.message||'Login failed. Please retry.';pass.value='';}
+          finally{button.disabled=false;button.textContent='Secure Login'}
+        };
+        button.onclick=submit;pass.addEventListener('keydown',e=>{if(e.key==='Enter')submit()});setTimeout(()=>pass.focus(),50);
+      }
+
+      async function recover(){
+        const token=sessionStorage.getItem(TOKEN_KEY)||'';
+        if(token){
+          try{
+            const r=await fetch(`${API}/auth/status`,{headers:{Authorization:`Bearer ${token}`}});
+            if(r.ok){installAuthFetch();boot()?.remove();return}
+          }catch{}
+          sessionStorage.removeItem(TOKEN_KEY);
+        }
+        showInlineLogin();
+      }
+
+      window.__aiOfficeInlineRecover=recover;
       setTimeout(()=>{
-        if(!boot())return;
-        if(msg())msg().textContent='Secure login is taking longer than expected. Retrying login module…';
-        const s=document.createElement('script');
-        s.src='./security-gate.js?v=20261005-8';
-        s.onload=()=>setTimeout(hideIfReady,100);
-        s.onerror=()=>{if(msg())msg().textContent='Login module could not be loaded. Please reload the application.';if(reload())reload().style.display='block'};
-        document.head.appendChild(s);
-      },2500);
+        const nativeGate=document.getElementById('ai-security-gate');
+        if(nativeGate){boot()?.remove();return}
+        recover();
+      },1200);
       setTimeout(()=>{
-        if(!boot())return;
-        if(msg())msg().textContent='The application did not finish starting. Please reload once. If it remains here, the frontend is failing before it reaches the API.';
-        if(reload())reload().style.display='block';
-      },7000);
+        if(boot()){
+          if(msg())msg().textContent='Secure login did not load. Opening fallback login…';
+          if(reload())reload().style.display='block';
+          recover();
+        }
+      },5000);
     })();
   </script>
-  <script src="./api-timeout-guard.js?v=20261005-8"></script>
-  <script src="./security-gate.js?v=20261005-8"></script>
+
+  <script src="./api-timeout-guard.js?v=20261005-9"></script>
+  <script src="./security-gate.js?v=20261005-9"></script>
   <script type="module" src="/src/main.tsx"></script>
   <script src="/alex-kai.js?v=20261005-4"></script>
   <script src="./result-duration.js?v=20261005-1"></script>
