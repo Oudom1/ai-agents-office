@@ -7,7 +7,7 @@ export const agents = [
   { id:'sysadmin', name:'Sam', role:'Senior System Administrator', state:'working-task', position:{x:20,y:43}, home:{x:20,y:43}, currentTask:'Design marketplace access control using RBAC first and ABAC where needed' },
   { id:'security', name:'Mina', role:'Senior Security', state:'working-task', position:{x:42,y:43}, home:{x:42,y:43}, currentTask:'Review authentication, authorization and monitoring security controls' },
   { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working-task', position:{x:65,y:43}, home:{x:65,y:43}, currentTask:'Find a more reliable hosting/deployment option to keep AI Agents Office smooth and responsive' },
-  { id:'qa', name:'Lina', role:'Senior Q/A', state:'working-task', position:{x:33,y:59}, home:{x:33,y:59}, currentTask:'Test frontend, backend and API separation plus marketplace smoke flow' },
+  { id:'qa', name:'Lina', role:'Senior Q/A', state:'working-task', position:{x:33,y:59}, home:{x:33,y:59}, currentTask:'Test live AI Agents Office login, API health and production smoke flow' },
   { id:'implement', name:'Kai', role:'Senior Implement', state:'working', position:{x:58,y:59}, home:{x:58,y:59} },
   { id:'developer', name:'Leo', role:'Senior Developer', state:'working-task', position:{x:75,y:59}, home:{x:75,y:59}, currentTask:'Build React marketplace UI matching the approved reference design' }
 ];
@@ -50,6 +50,9 @@ const samTitles = [
 ];
 
 const linaTitles = [
+  'Test live AI Agents Office login, API health and production smoke flow',
+  'Test login timeout and backend wake-up recovery behavior',
+  'Test refresh, logout and session recovery on the live site',
   'Test frontend, backend and API separation plus marketplace smoke flow',
   'Test React marketplace UI on desktop, tablet and mobile',
   'Test product detail, favorites, search, filters and sorting',
@@ -57,10 +60,7 @@ const linaTitles = [
   'Test RBAC positive and negative authorization scenarios',
   'Test ABAC/resource ownership rules if implemented',
   'Test seller upload, edit, delete and submit-for-review workflow',
-  'Test Java backend and REST API endpoints including validation and error handling',
-  'Test cart, checkout, order history and persistence',
-  'Test admin approval, rejection and marketplace moderation',
-  'Run regression testing after Leo fixes defects',
+  'Run regression testing after fixes',
   'Run final production smoke test and confirm release readiness'
 ];
 
