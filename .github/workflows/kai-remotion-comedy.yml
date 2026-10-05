@@ -1,0 +1,37 @@
+name: Kai Remotion Comedy
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'remotion-kai-comedy/**'
+      - '.github/workflows/kai-remotion-comedy.yml'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: remotion-kai-comedy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Render 60-second comedy MP4
+        run: npm run render
+
+      - name: Upload Kai comedy video
+        uses: actions/upload-artifact@v4
+        with:
+          name: kai-security-comedy-remotion
+          path: remotion-kai-comedy/out/kai-security-comedy.mp4
+          if-no-files-found: error
+          retention-days: 14
