@@ -1,5 +1,5 @@
 (()=>{
-  const API='https://ai-agents-office-api.onrender.com/api';
+  const API='https://ai-agents-office-production.up.railway.app/api';
   const TOKEN_KEY='ai-office-auth-token-v1';
   const USER_KEY='ai-office-auth-user-v1';
   const rawFetch=window.fetch.bind(window);
@@ -22,7 +22,7 @@
     window.fetch=(input,init={})=>{
       let url='';
       try{url=typeof input==='string'?input:input instanceof URL?input.href:input.url||''}catch{}
-      if(url.startsWith('https://ai-agents-office-api.onrender.com/api')){
+      if(url.startsWith(API)){
         const headers=new Headers(init.headers || (input instanceof Request?input.headers:undefined) || {});
         const t=token(); if(t)headers.set('Authorization',`Bearer ${t}`);
         return rawFetch(input,{...init,headers});
