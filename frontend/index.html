@@ -32,7 +32,7 @@
   </div>
   <div id="root"></div>
 
-  <script src="./api-timeout-guard.js?v=20261005-14"></script>
+  <script src="./api-timeout-guard.js?v=20261006-1"></script>
   <script type="module">
     (async()=>{
       const API='https://ai-agents-office-production.up.railway.app/api';
@@ -41,12 +41,11 @@
       const actions=document.getElementById('session-actions');
       const retryBtn=document.getElementById('session-retry');
       const loginBtn=document.getElementById('session-login');
-      const goToLogin=()=>location.replace('./login-diagnostic.html?v=railway3');
-      const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+      const goToLogin=()=>location.replace('./login-diagnostic.html?v=railway4');
 
       loginBtn.onclick=goToLogin;
 
-      async function checkSession(token,timeoutMs=12000){
+      async function checkSession(token,timeoutMs=8000){
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(),timeoutMs);
         try{
@@ -60,32 +59,24 @@
         if(!token){ goToLogin(); return; }
         try{
           msg.textContent='Verifying secure session…';
-          let response;
-          try{ response=await checkSession(token,12000); }
-          catch{
-            msg.textContent='Backend connection retrying…';
-            await sleep(1500);
-            response=await checkSession(token,12000);
-          }
-          if(!response?.ok) throw new Error('Session expired');
+          const response=await checkSession(token,8000);
+          if(!response.ok) throw new Error('Session expired');
           msg.textContent='Session verified. Opening office…';
           await import('/src/main.tsx');
           document.getElementById('session-check')?.remove();
           const addScript=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.body.appendChild(s);};
-          addScript('./alex-kai.js?v=20261005-4');
-          addScript('./result-duration.js?v=20261005-1');
-          addScript('./snack-lounge.js?v=20261006-1');
-          addScript('./system-integrations.js?v=20261005-2');
+          addScript('./alex-kai.js?v=20261006-1');
+          addScript('./result-duration.js?v=20261006-1');
         }catch(e){
           const text=String(e?.message||e||'');
           const timedOut=/abort|respond within|timeout/i.test(text);
           if(timedOut){
-            msg.textContent='The Railway backend did not respond in time. Click Retry or use Secure Login.';
+            msg.textContent='Backend did not respond in time. Click Retry or Secure Login.';
             actions.style.display='flex';
           }else{
             sessionStorage.removeItem(TOKEN_KEY);
             msg.textContent='Session expired. Opening secure login…';
-            setTimeout(goToLogin,500);
+            setTimeout(goToLogin,400);
           }
         }
       }
