@@ -1,5 +1,5 @@
 (()=>{
-  const API='https://ai-agents-office-api.onrender.com/api';
+  const API='https://ai-agents-office-production.up.railway.app/api';
   const TOKEN_KEY='ai-office-auth-token-v1';
   const AGENTS=[
     ['manager','Alex','Manager'],['sysadmin','Sam','Senior System Administrator'],['security','Mina','Senior Security'],
