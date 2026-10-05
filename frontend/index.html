@@ -7,7 +7,6 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>AI Agents Office</title>
-  <link rel="stylesheet" href="./modern-office.css?v=20261005-2" />
   <style>
     html,body{min-height:100%;margin:0;background:#06111d;color:#e8f4fb;overflow-y:auto}
     #session-check{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,#10354b 0,#06111d 45%,#030911 100%);font-family:Inter,Segoe UI,Arial,sans-serif}
@@ -34,7 +33,6 @@
   <div id="root"></div>
 
   <script src="./api-timeout-guard.js?v=20261005-14"></script>
-  <script src="./ui-smooth-fix.js?v=20261005-1"></script>
   <script type="module">
     (async()=>{
       const API='https://ai-agents-office-production.up.railway.app/api';
@@ -43,7 +41,7 @@
       const actions=document.getElementById('session-actions');
       const retryBtn=document.getElementById('session-retry');
       const loginBtn=document.getElementById('session-login');
-      const goToLogin=()=>location.replace('./login-diagnostic.html?v=railway2');
+      const goToLogin=()=>location.replace('./login-diagnostic.html?v=railway3');
       const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
       loginBtn.onclick=goToLogin;
@@ -78,7 +76,6 @@
           addScript('./result-duration.js?v=20261005-1');
           addScript('./snack-lounge.js?v=20261006-1');
           addScript('./system-integrations.js?v=20261005-2');
-          addScript('./office-logs.js?v=20261005-1');
         }catch(e){
           const text=String(e?.message||e||'');
           const timedOut=/abort|respond within|timeout/i.test(text);
