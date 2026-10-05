@@ -1,8 +1,10 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Office Login Diagnostic</title><style>body{font-family:Arial,sans-serif;background:#07121d;color:#e8f4fb;margin:0;padding:24px}.card{max-width:720px;margin:auto;background:#0b1b2a;border:1px solid #294b62;border-radius:14px;padding:20px}.ok{color:#7ee2a8}.bad{color:#ff9ea8}.muted{color:#91adbe}button{padding:10px 14px;border-radius:8px;border:1px solid #3d6f8a;background:#123b52;color:#fff;font-weight:700;cursor:pointer}input{box-sizing:border-box;width:100%;padding:10px;border-radius:8px;border:1px solid #294b62;background:#06101a;color:#fff;margin:5px 0 12px}pre{white-space:pre-wrap;background:#06101a;border-radius:8px;padding:12px}</style></head>
-<body><div class="card"><h2>AI Agents Office Login Diagnostic</h2><p class="muted">This page first checks connectivity, then can perform the same encrypted login used by the main office. Your password stays in this browser page and is not stored in GitHub.</p><button id="run">Run Transport Verification</button><pre id="out">Ready.</pre><hr style="border:0;border-top:1px solid #294b62;margin:18px 0"><h3>Full Login Test</h3><label>Admin name</label><input id="user" value="Admin" autocomplete="username"><label>Password</label><input id="pass" type="password" autocomplete="current-password" placeholder="Enter password"><button id="login">Test Encrypted Login</button><pre id="loginout">Not tested yet.</pre><p><a style="color:#8fd9ff" href="./">Back to Login</a></p></div><script>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Office Secure Login</title><style>body{font-family:Arial,sans-serif;background:#07121d;color:#e8f4fb;margin:0;padding:24px}.card{max-width:720px;margin:auto;background:#0b1b2a;border:1px solid #294b62;border-radius:14px;padding:20px}.ok{color:#7ee2a8}.bad{color:#ff9ea8}.muted{color:#91adbe}button{padding:10px 14px;border-radius:8px;border:1px solid #3d6f8a;background:#123b52;color:#fff;font-weight:700;cursor:pointer;margin-right:8px}input{box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #294b62;background:#06101a;color:#fff;margin:5px 0 12px;pointer-events:auto;user-select:text}pre{white-space:pre-wrap;background:#06101a;border-radius:8px;padding:12px}</style></head>
+<body><div class="card"><h2>AI Agents Office Secure Login</h2><p class="muted">This page uses the same verified encrypted login path as the office. After a successful login it stores the returned session token in this browser tab and opens the office automatically.</p><button id="run">Run Transport Verification</button><pre id="out">Ready.</pre><hr style="border:0;border-top:1px solid #294b62;margin:18px 0"><h3>Login & Open Office</h3><label>Admin name</label><input id="user" value="Admin" autocomplete="username"><label>Password</label><input id="pass" type="password" autocomplete="current-password" placeholder="Enter password"><button id="login">Secure Login & Open Office</button><pre id="loginout">Not tested yet.</pre></div><script>
 const API='https://ai-agents-office-api.onrender.com/api';
+const TOKEN_KEY='ai-office-auth-token-v1';
+const USER_KEY='ai-office-auth-user-v1';
 const out=document.getElementById('out');
 const loginout=document.getElementById('loginout');
 const b64ToBytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -30,11 +32,12 @@ async function buildEncryptedPayload(username,password){
   const all=new Uint8Array(encrypted);
   return {handshakeId:hs.handshakeId,clientPublicKey:bytesToB64(clientPublicRaw),iv:bytesToB64(iv),ciphertext:bytesToB64(all.slice(0,-16)),tag:bytesToB64(all.slice(-16))};
 }
-async function loginTest(){
+async function loginAndOpen(){
   const username=document.getElementById('user').value.trim();
   const password=document.getElementById('pass').value;
   const lines=[];const add=s=>{lines.push(s);loginout.textContent=lines.join('\n')};
   if(!username||!password){add('FAIL: enter username and password.');return}
+  const btn=document.getElementById('login');btn.disabled=true;btn.textContent='Connecting...';
   try{
     add('1) Building encrypted login payload...');
     const encrypted=await buildEncryptedPayload(username,password);
@@ -47,11 +50,16 @@ async function loginTest(){
     add('3) Verifying returned session token...');
     const s=await fetch(API+'/auth/status',{headers:{Authorization:'Bearer '+data.token},cache:'no-store'});
     if(!s.ok){add('FAIL: session token was not accepted.');return}
-    add('PASS: session token accepted.');
-    add('RESULT: FULL LOGIN PATH PASSED. Main login issue is frontend/session handling, not credentials.');
+    sessionStorage.setItem(TOKEN_KEY,data.token);
+    sessionStorage.setItem(USER_KEY,data.user||username);
+    add('PASS: session token accepted and saved.');
+    add('RESULT: LOGIN PASSED. Opening AI Agents Office...');
+    setTimeout(()=>location.href='./',500);
   }catch(e){add('FAIL: '+(e?.message||String(e)))}
+  finally{btn.disabled=false;btn.textContent='Secure Login & Open Office';document.getElementById('pass').value=''}
 }
 document.getElementById('run').onclick=transportTest;
-document.getElementById('login').onclick=loginTest;
+document.getElementById('login').onclick=loginAndOpen;
+document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')loginAndOpen()});
 transportTest();
 </script></body></html>
