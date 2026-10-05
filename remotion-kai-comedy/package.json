@@ -1,0 +1,15 @@
+{
+  "name": "kai-remotion-comedy",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "studio": "remotion studio --no-open",
+    "render": "remotion render KaiSecurityComedy out/kai-security-comedy.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "remotion": "latest"
+  }
+}
