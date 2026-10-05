@@ -1,0 +1,29 @@
+name: Auth smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/auth-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check backend health
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 90 \
+            https://ai-agents-office-api.onrender.com/api/health \
+            | tee /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+      - name: Check secure handshake endpoint
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 90 \
+            -X POST https://ai-agents-office-api.onrender.com/api/auth/handshake \
+            | tee /tmp/handshake.json
+          grep -q '"handshakeId"' /tmp/handshake.json
+          grep -q '"serverPublicKey"' /tmp/handshake.json
+          grep -q '"challenge"' /tmp/handshake.json
