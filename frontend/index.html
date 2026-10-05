@@ -50,47 +50,32 @@
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(),timeoutMs);
         try{
-          return await fetch(`${API}/auth/status`,{
-            headers:{Authorization:`Bearer ${token}`},
-            cache:'no-store',
-            signal:controller.signal
-          });
-        } finally {
-          clearTimeout(timer);
-        }
+          return await fetch(`${API}/auth/status`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal});
+        } finally { clearTimeout(timer); }
       }
 
       async function openOffice(){
         actions.style.display='none';
         const token=sessionStorage.getItem(TOKEN_KEY)||'';
         if(!token){ goToLogin(); return; }
-
         try{
           msg.textContent='Verifying secure session…';
           let response;
-          try{
-            response=await checkSession(token,12000);
-          }catch{
+          try{ response=await checkSession(token,12000); }
+          catch{
             msg.textContent='Backend is waking up… retrying secure session.';
             await sleep(1500);
             response=await checkSession(token,12000);
           }
-
           if(!response?.ok) throw new Error('Session expired');
-
           msg.textContent='Session verified. Opening office…';
           await import('/src/main.tsx');
           document.getElementById('session-check')?.remove();
-
-          const addScript=(src)=>{
-            const s=document.createElement('script');
-            s.src=src;
-            document.body.appendChild(s);
-          };
+          const addScript=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.body.appendChild(s);};
           addScript('./alex-kai.js?v=20261005-4');
           addScript('./result-duration.js?v=20261005-1');
-          addScript('./snack-lounge.js?v=20261005-2');
-          addScript('./system-integrations.js?v=20261005-1');
+          addScript('./snack-lounge.js?v=20261005-3');
+          addScript('./system-integrations.js?v=20261005-2');
         }catch(e){
           const text=String(e?.message||e||'');
           const timedOut=/abort|respond within|timeout/i.test(text);
