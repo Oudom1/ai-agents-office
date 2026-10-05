@@ -13,6 +13,9 @@
     #session-card{width:min(420px,90vw);background:#091827;border:1px solid #244761;border-radius:16px;padding:22px;box-shadow:0 28px 70px rgba(0,0,0,.5)}
     #session-title{font-weight:900;font-size:18px;margin-bottom:8px}
     #session-msg{font-size:11px;line-height:1.5;color:#9fc3d5}
+    #session-actions{display:none;gap:8px;margin-top:14px}
+    #session-actions button{border:1px solid #32627d;background:#0d3147;color:#e8f4fb;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer}
+    #session-actions button.primary{background:#1477b8;border-color:#2aa8e8}
     .agent.state-working .bubble{display:none!important}
   </style>
 </head>
@@ -21,45 +24,89 @@
     <div id="session-card">
       <div id="session-title">AI Agents Office</div>
       <div id="session-msg">Verifying secure session…</div>
+      <div id="session-actions">
+        <button id="session-retry" class="primary">Retry</button>
+        <button id="session-login">Secure Login</button>
+      </div>
     </div>
   </div>
   <div id="root"></div>
 
-  <script src="./api-timeout-guard.js?v=20261005-12"></script>
+  <script src="./api-timeout-guard.js?v=20261005-13"></script>
   <script type="module">
     (async()=>{
       const API='https://ai-agents-office-api.onrender.com/api';
       const TOKEN_KEY='ai-office-auth-token-v1';
-      const token=sessionStorage.getItem(TOKEN_KEY)||'';
       const msg=document.getElementById('session-msg');
+      const actions=document.getElementById('session-actions');
+      const retryBtn=document.getElementById('session-retry');
+      const loginBtn=document.getElementById('session-login');
       const goToLogin=()=>location.replace('./login-diagnostic.html');
+      const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-      if(!token){
-        goToLogin();
-        return;
+      loginBtn.onclick=goToLogin;
+
+      async function checkSession(token,timeoutMs=12000){
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),timeoutMs);
+        try{
+          return await fetch(`${API}/auth/status`,{
+            headers:{Authorization:`Bearer ${token}`},
+            cache:'no-store',
+            signal:controller.signal
+          });
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
-      try {
-        const r=await fetch(`${API}/auth/status`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
-        if(!r.ok) throw new Error('Session expired');
-        msg.textContent='Session verified. Opening office…';
-        await import('/src/main.tsx');
-        document.getElementById('session-check')?.remove();
+      async function openOffice(){
+        actions.style.display='none';
+        const token=sessionStorage.getItem(TOKEN_KEY)||'';
+        if(!token){ goToLogin(); return; }
 
-        const addScript=(src)=>{
-          const s=document.createElement('script');
-          s.src=src;
-          document.body.appendChild(s);
-        };
-        addScript('./alex-kai.js?v=20261005-4');
-        addScript('./result-duration.js?v=20261005-1');
-        addScript('./snack-lounge.js?v=20261005-2');
-        addScript('./system-integrations.js?v=20261005-1');
-      } catch(e) {
-        sessionStorage.removeItem(TOKEN_KEY);
-        msg.textContent='Session unavailable. Opening secure login…';
-        setTimeout(goToLogin,250);
+        try{
+          msg.textContent='Verifying secure session…';
+          let response;
+          try{
+            response=await checkSession(token,12000);
+          }catch{
+            msg.textContent='Backend is waking up… retrying secure session.';
+            await sleep(1500);
+            response=await checkSession(token,12000);
+          }
+
+          if(!response?.ok) throw new Error('Session expired');
+
+          msg.textContent='Session verified. Opening office…';
+          await import('/src/main.tsx');
+          document.getElementById('session-check')?.remove();
+
+          const addScript=(src)=>{
+            const s=document.createElement('script');
+            s.src=src;
+            document.body.appendChild(s);
+          };
+          addScript('./alex-kai.js?v=20261005-4');
+          addScript('./result-duration.js?v=20261005-1');
+          addScript('./snack-lounge.js?v=20261005-2');
+          addScript('./system-integrations.js?v=20261005-1');
+        }catch(e){
+          const text=String(e?.message||e||'');
+          const timedOut=/abort|respond within|timeout/i.test(text);
+          if(timedOut){
+            msg.textContent='The backend is still waking up. Click Retry, or use Secure Login if this continues.';
+            actions.style.display='flex';
+          }else{
+            sessionStorage.removeItem(TOKEN_KEY);
+            msg.textContent='Session expired. Opening secure login…';
+            setTimeout(goToLogin,500);
+          }
+        }
       }
+
+      retryBtn.onclick=openOffice;
+      openOffice();
     })();
   </script>
 </body>
