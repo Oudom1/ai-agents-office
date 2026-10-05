@@ -6,7 +6,7 @@ export const agents = [
   { id:'manager', name:'Alex', role:'Manager', state:'working-task', position:{x:18,y:18}, home:{x:18,y:18}, currentTask:'Coordinate marketplace delivery, blockers and cross-team handoffs' },
   { id:'sysadmin', name:'Sam', role:'Senior System Administrator', state:'working-task', position:{x:20,y:43}, home:{x:20,y:43}, currentTask:'Design marketplace access control using RBAC first and ABAC where needed' },
   { id:'security', name:'Mina', role:'Senior Security', state:'working-task', position:{x:42,y:43}, home:{x:42,y:43}, currentTask:'Review authentication, authorization and monitoring security controls' },
-  { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working-task', position:{x:65,y:43}, home:{x:65,y:43}, currentTask:'Evaluate free deployment platforms for frontend, API and Java backend' },
+  { id:'cloud', name:'Noah', role:'Senior Cloud Operator', state:'working-task', position:{x:65,y:43}, home:{x:65,y:43}, currentTask:'Find a more reliable hosting/deployment option to keep AI Agents Office smooth and responsive' },
   { id:'qa', name:'Lina', role:'Senior Q/A', state:'working-task', position:{x:33,y:59}, home:{x:33,y:59}, currentTask:'Test frontend, backend and API separation plus marketplace smoke flow' },
   { id:'implement', name:'Kai', role:'Senior Implement', state:'working', position:{x:58,y:59}, home:{x:58,y:59} },
   { id:'developer', name:'Leo', role:'Senior Developer', state:'working-task', position:{x:75,y:59}, home:{x:75,y:59}, currentTask:'Build React marketplace UI matching the approved reference design' }
@@ -78,18 +78,18 @@ const minaTitles = [
 ];
 
 const noahTitles = [
-  'Evaluate free deployment platforms for frontend, API and Java backend',
-  'Select a zero-cost deployment architecture and document platform limits',
-  'Prepare environment variables, CORS and production configuration',
+  'Find a more reliable hosting/deployment option to keep AI Agents Office smooth and responsive',
+  'Compare Render with alternative low-cost or free hosts for API cold-start time, uptime, region and limits',
+  'Check whether frontend, API and monitoring should be split across different providers for better reliability',
+  'Recommend the best hosting architecture with a fallback option if the primary API host is slow or unavailable',
+  'Design health checks, retry policy, timeout policy and graceful degraded mode for the frontend',
+  'Prepare environment variables, CORS and production configuration for the selected host',
   'Create or improve CI pipeline for frontend build and deployment',
-  'Create or improve CI pipeline for Java backend and REST API',
-  'Configure deployment health checks and rollback-safe release steps',
+  'Create or improve CI pipeline for backend/API deployment',
   'Prepare staging environment while Leo, Sam, Lina and Mina complete validation',
-  'Deploy frontend, API and backend after release candidate passes QA and security review',
-  'Integrate application/security logs and health metrics into monitoring with Mina',
-  'Verify CI/CD from GitHub commit through production deployment',
-  'Resolve deployment/runtime blockers or escalate to Alex when a decision is needed',
-  'Complete final deployment handoff with public URLs, health checks, monitoring and operating notes'
+  'Integrate application/security logs, uptime checks and health metrics with Mina',
+  'Verify production responsiveness, login speed and recovery after backend sleep/restart',
+  'Complete final deployment handoff with primary URL, backup/fallback plan, monitoring and operating notes'
 ];
 
 const mkTasks = (prefix:string, agentId:string, provider:string, titles:string[], offset:number, durationSec:number) => titles.map((title, index) => ({
