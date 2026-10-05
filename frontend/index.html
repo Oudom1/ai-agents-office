@@ -42,14 +42,14 @@
         const root=document.getElementById('root');
         if(gate || (root && root.childElementCount>0)) boot()?.remove();
       };
-      window.addEventListener('error',e=>{if(msg()) msg().textContent='Frontend startup error detected. Retrying secure login…';});
+      window.addEventListener('error',()=>{if(msg()) msg().textContent='Frontend startup error detected. Retrying secure login…';});
       window.addEventListener('unhandledrejection',()=>{if(msg()) msg().textContent='A startup request failed. Retrying secure login…';});
       const timer=setInterval(()=>{hideIfReady();if(!boot())clearInterval(timer)},250);
       setTimeout(()=>{
         if(!boot())return;
         if(msg())msg().textContent='Secure login is taking longer than expected. Retrying login module…';
         const s=document.createElement('script');
-        s.src='./security-gate.js?v=20261005-7';
+        s.src='./security-gate.js?v=20261005-8';
         s.onload=()=>setTimeout(hideIfReady,100);
         s.onerror=()=>{if(msg())msg().textContent='Login module could not be loaded. Please reload the application.';if(reload())reload().style.display='block'};
         document.head.appendChild(s);
@@ -61,8 +61,8 @@
       },7000);
     })();
   </script>
-  <script src="./api-timeout-guard.js?v=20261005-7"></script>
-  <script src="./security-gate.js?v=20261005-7"></script>
+  <script src="./api-timeout-guard.js?v=20261005-8"></script>
+  <script src="./security-gate.js?v=20261005-8"></script>
   <script type="module" src="/src/main.tsx"></script>
   <script src="/alex-kai.js?v=20261005-4"></script>
   <script src="./result-duration.js?v=20261005-1"></script>
