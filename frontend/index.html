@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>AI Agents Office</title>
   <style>
-    html,body{min-height:100%;margin:0;background:#06111d;color:#e8f4fb}
+    html,body{min-height:100%;margin:0;background:#06111d;color:#e8f4fb;overflow-y:auto}
     #session-check{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,#10354b 0,#06111d 45%,#030911 100%);font-family:Inter,Segoe UI,Arial,sans-serif}
     #session-card{width:min(420px,90vw);background:#091827;border:1px solid #244761;border-radius:16px;padding:22px;box-shadow:0 28px 70px rgba(0,0,0,.5)}
     #session-title{font-weight:900;font-size:18px;margin-bottom:8px}
@@ -33,6 +33,7 @@
   <div id="root"></div>
 
   <script src="./api-timeout-guard.js?v=20261005-13"></script>
+  <script src="./ui-smooth-fix.js?v=20261005-1"></script>
   <script type="module">
     (async()=>{
       const API='https://ai-agents-office-api.onrender.com/api';
