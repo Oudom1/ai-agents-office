@@ -1,5 +1,6 @@
 (()=>{
   const API_PREFIX='https://ai-agents-office-api.onrender.com/api';
+  const TOKEN_KEY='ai-office-auth-token-v1';
   const originalFetch=window.fetch.bind(window);
   const DEFAULT_TIMEOUT_MS=30000;
   const AUTH_TIMEOUT_MS=60000;
@@ -23,8 +24,14 @@
       }
     }
 
+    const headers=new Headers(init.headers || (input instanceof Request?input.headers:undefined) || {});
     try{
-      return await originalFetch(input,{...init,signal:controller.signal});
+      const token=sessionStorage.getItem(TOKEN_KEY)||'';
+      if(token && !headers.has('Authorization')) headers.set('Authorization',`Bearer ${token}`);
+    }catch{}
+
+    try{
+      return await originalFetch(input,{...init,headers,signal:controller.signal});
     }catch(err){
       if(controller.signal.aborted){
         const seconds=Math.round(timeoutMs/1000);
