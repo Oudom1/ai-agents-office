@@ -310,6 +310,43 @@ app.post('/api/admin/users',requireAuth,async(req:any,res)=>{
   }
 });
 
+// Advance non-video office project tasks on the server so refreshes do not reset progress.
+function advanceOfficeTasks(){
+  const now=Date.now();
+  const managedAgentIds=new Set(agents.filter(a=>a.id!=='implement').map(a=>a.id));
+  for(const agentId of managedAgentIds){
+    const agent:any=agents.find(a=>a.id===agentId);
+    const agentTasks=tasks.filter(t=>t.agentId===agentId).sort((x,y)=>new Date(x.createdAt).getTime()-new Date(y.createdAt).getTime());
+    let current:any=agentTasks.find(t=>t.status!=='done' && t.phase==='working');
+    if(current && current.startedAt && current.durationSec){
+      const elapsed=Math.floor((now-new Date(current.startedAt).getTime())/1000);
+      if(elapsed>=Number(current.durationSec)){
+        current.status='done';
+        current.phase='completed';
+        current.completedAt=new Date().toISOString();
+        current.resultMessage=`Complete — ${agent?.name || agentId} finished this task and the next assigned task can start automatically.`;
+        delete current.blocker;
+        current=undefined;
+      }
+    }
+    if(!current){
+      const next:any=agentTasks.find(t=>t.status!=='done' && !t.blocker);
+      if(next){
+        next.phase='working';
+        next.startedAt=next.startedAt || new Date().toISOString();
+        next.resultMessage=`${agent?.name || agentId} is actively working on this task.`;
+        if(agent){agent.state='working-task';agent.currentTask=next.title;agent.destination=agent.home;}
+      }else if(agent){
+        agent.state='working';
+        delete agent.currentTask;
+        agent.destination=agent.home;
+      }
+    }
+  }
+}
+advanceOfficeTasks();
+setInterval(advanceOfficeTasks,5000);
+
 app.get('/api/agents', requireAuth, (_req,res)=>res.json(agents));
 app.get('/api/tasks', requireAuth, (_req,res)=>res.json(tasks));
 app.get('/api/operations', requireAuth, (_req,res)=>{
