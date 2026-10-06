@@ -7,7 +7,8 @@ main{width:100%;min-width:0}
 aside{min-width:0;width:100%}
 .panel{min-width:0;overflow-wrap:anywhere}
 .tasks-panel,.results-panel{content-visibility:auto;contain-intrinsic-size:600px}
-.agent-row,.task-card,.result-card{content-visibility:auto;contain-intrinsic-size:80px}
+.agent-row,.task-card{content-visibility:auto;contain-intrinsic-size:80px}
+.result-card{content-visibility:visible!important;contain:none!important}
 
 /* Lighter rendering on phones/tablets */
 @media(max-width:900px){
