@@ -1,7 +1,3 @@
-const securityScript = document.createElement('script');
-securityScript.src = '../security-gate.js';
-document.head.appendChild(securityScript);
-
 document.getElementById('year').textContent = new Date().getFullYear();
 
 const profileCore = document.querySelector('.profile-core');
