@@ -75,11 +75,12 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 </div>
 
 <div class="table-wrap"><table><thead>
-<tr><th>Priority</th><th>Patch</th><th>Vulnerability / Product</th><th>Severity</th><th>Affected Computers</th><th>Category</th><th>Exploit</th><th>Patch Available</th><th>Benchmark</th><th>Action</th><th>Status</th><th>Owner</th></tr>
+<tr><th>Priority</th><th>Patch</th><th>Vulnerability / Product</th><th>Resource / Key</th><th>Severity</th><th>Affected Computers</th><th>Category</th><th>Exploit</th><th>Patch Available</th><th>Benchmark</th><th>Action</th><th>Status</th><th>Owner</th></tr>
 <tr class="filter-row">
 <th><select id="fPriority"><option value="">All</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></th>
 <th><input id="fPatch" placeholder="Patch..."></th>
 <th><input id="fProduct" placeholder="Product..."></th>
+<th><input id="fResource" placeholder="KB / CVE / vendor..."></th>
 <th><select id="fSeverity"><option value="">All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option><option>Unknown</option></select></th>
 <th><input id="fAffected" type="number" min="0" placeholder="Min count"></th>
 <th><select id="fCategory"><option value="">All</option><option>Endpoint / Hardware & OS</option><option>SQL / Database</option><option>Application</option><option>Server / Infrastructure</option></select></th>
@@ -297,10 +298,25 @@ function importRows(rows){
   });
  });
 }
+function bestResource(p){
+ const text=[p.kb,p.cve,p.bulletinId,p.patchName,p.vulnerability,p.product].join(' ');
+ const kb=(text.match(/KB\d{6,8}/i)||[])[0];
+ const cve=(text.match(/CVE-\d{4}-\d+/i)||[])[0];
+ if(kb) return {key:kb.toUpperCase(),label:'Microsoft KB',url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(kb)};
+ if(cve) return {key:cve.toUpperCase(),label:'CVE',url:'https://nvd.nist.gov/vuln/detail/'+encodeURIComponent(cve)};
+ if(p.bulletinId) return {key:p.bulletinId,label:'Bulletin',url:'https://www.google.com/search?q='+encodeURIComponent(p.bulletinId+' '+(p.patchName||p.vulnerability||''))};
+ const t=String(p.patchName||p.vulnerability||p.product||'').toLowerCase();
+ if(t.includes('firefox')) return {key:'Mozilla',label:'Vendor Advisory',url:'https://www.mozilla.org/security/advisories/'};
+ if(t.includes('visual c++')||t.includes('microsoft 365')||t.includes('windows')) return {key:'Microsoft',label:'Vendor Search',url:'https://support.microsoft.com/search/results?query='+encodeURIComponent(p.patchName||p.vulnerability||p.product||'')};
+ if(t.includes('cisco')) return {key:'Cisco',label:'Vendor Advisory',url:'https://sec.cloudapps.cisco.com/security/center/publicationListing.x'};
+ if(t.includes('chrome')) return {key:'Google Chrome',label:'Vendor Advisory',url:'https://chromereleases.googleblog.com/'};
+ if(t.includes('adobe')||t.includes('acrobat')) return {key:'Adobe',label:'Vendor Advisory',url:'https://helpx.adobe.com/security.html'};
+ return {key:String(p.kb||p.patchName||p.product||'Patch').slice(0,42),label:'Patch Search',url:'https://www.google.com/search?q='+encodeURIComponent([p.kb,p.patchName,p.vulnerability,p.product].filter(Boolean).join(' '))};
+}
 function filtered(){
  const q=$('search').value.toLowerCase(), pf=$('priorityFilter').value, cf=$('categoryFilter').value, av=$('patchFilter').value;
  const fp=$('fPriority')?.value||'', fpatch=($('fPatch')?.value||'').toLowerCase(), fprod=($('fProduct')?.value||'').toLowerCase();
- const fsev=$('fSeverity')?.value||'', faff=Number($('fAffected')?.value||0), fcat=$('fCategory')?.value||'';
+ const fres=($('fResource')?.value||'').toLowerCase(), fsev=$('fSeverity')?.value||'', faff=Number($('fAffected')?.value||0), fcat=$('fCategory')?.value||'';
  const fexp=$('fExploit')?.value||'', fpav=$('fPatchAvail')?.value||'', fbench=$('fBenchmark')?.value||'';
  const faction=($('fAction')?.value||'').toLowerCase(), fstatus=$('fStatus')?.value||'', fowner=($('fOwner')?.value||'').toLowerCase();
  return patches.filter(p=>{
@@ -310,6 +326,7 @@ function filtered(){
    &&(!fp||p.priority.startsWith(fp))
    &&(!fpatch||[p.kb,p.patchName,p.cve].join(' ').toLowerCase().includes(fpatch))
    &&(!fprod||[p.product,p.vulnerability].join(' ').toLowerCase().includes(fprod))
+   &&(!fres||[bestResource(p).key,bestResource(p).label,p.bulletinId,p.kb,p.cve].join(' ').toLowerCase().includes(fres))
    &&(!fsev||p.severity===fsev)
    &&(!faff||(Number(p.affectedCount)||0)>=faff)
    &&(!fcat||p.category===fcat)
@@ -327,6 +344,7 @@ function render(){
  <td><span class="prio ${p.priority.slice(0,2)}">${esc(p.priority)}</span><div class="small">Score ${p.priorityScore}</div></td>
  <td><b>${esc(p.kb||'No Patch ID')}</b><div class="small">${esc(p.patchName||p.cve||'')}</div><div class="small">Source: ${esc(p.sourceType||'Manual')}</div></td>
  <td>${esc(p.product||p.vulnerability)}</td>
+ <td>${(()=>{const rr=bestResource(p);return '<a href="'+esc(rr.url)+'" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" style="color:#7fe7ff;text-decoration:none;font-weight:700">'+esc(rr.key)+' ↗</a><div class="small">'+esc(rr.label)+'</div>'})()}</td>
  <td><span class="sev ${esc(p.severity)}">${esc(p.severity)}</span>${p.cvss!==null?'<div class="small">CVSS '+esc(p.cvss)+'</div>':''}</td>
  <td><b>${esc(p.affectedCount)}</b><div class="small">${esc(p.affectedBand)}</div></td>
  <td>${esc(p.category)}</td><td>${esc(p.exploit)}</td><td>${esc(p.patchAvailability)}</td>
@@ -397,6 +415,7 @@ function renderFullPatchPage(p){
      <div class="box"><b>Published / Discovered</b><span>${esc(p.publishedDate||'-')}\n${esc(p.discoveredDate||'-')}</span></div>
      <div class="box"><b>Status / Owner</b><span>${esc(p.status)}\n${esc(p.owner)}</span></div>
      <div class="box"><b>Patch Source</b><span>${esc(p.sourceType||'Manual')}\nBulletin: ${esc(p.bulletinId||'-')}</span></div>
+     <div class="box"><b>Primary Resource Key</b><span>${esc(bestResource(p).key)}\n${esc(bestResource(p).label)}</span><div class="review-links"><a target="_blank" rel="noreferrer" href="${esc(bestResource(p).url)}">Open primary resource ↗</a></div></div>
      <div class="box"><b>Platform / Reboot</b><span>${esc(p.platform||'-')}\n${esc(p.reboot||'Unknown')}</span></div>
      <div class="box"><b>Approval / Uninstall</b><span>${esc(p.approveStatus||'-')}\nUninstall: ${esc(p.patchUninstallation||'Unknown')}</span></div>
      <div class="box"><b>Failed Systems</b><span>${esc(p.failedSystems??0)}</span></div>
@@ -448,7 +467,7 @@ function operationRows(list){
   Category:p.category,Affected_Computers:p.affectedCount,Affected_Band:p.affectedBand,
   Exploit_Status:p.exploit,Patch_Availability:p.patchAvailability,Patch_ID:p.kb||'',
   Patch_Name:p.patchName||'',CVE:p.cve||'',Vulnerability:p.vulnerability||p.product||'',
-  Source_Type:p.sourceType||'',Bulletin_ID:p.bulletinId||'',Platform:p.platform||'',Approve_Status:p.approveStatus||'',Reboot:p.reboot||'',Patch_Uninstallation:p.patchUninstallation||'',Failed_Systems:p.failedSystems??'',Published_Date:p.publishedDate||'',Discovered_Date:p.discoveredDate||'',
+  Source_Type:p.sourceType||'',Primary_Resource_Key:bestResource(p).key,Primary_Resource_Type:bestResource(p).label,Primary_Resource_URL:bestResource(p).url,Bulletin_ID:p.bulletinId||'',Platform:p.platform||'',Approve_Status:p.approveStatus||'',Reboot:p.reboot||'',Patch_Uninstallation:p.patchUninstallation||'',Failed_Systems:p.failedSystems??'',Published_Date:p.publishedDate||'',Discovered_Date:p.discoveredDate||'',
   Benchmark_Status:benchmarkInfo(p).benchmarkStatus,Benchmark_Target_Days:benchmarkInfo(p).targetDays,Days_Open:benchmarkInfo(p).daysOpen??'',Overdue_Days:benchmarkInfo(p).overdueDays??'',Operation_Action:p.action,Status:p.status,Owner:p.owner
  }));
 }
@@ -490,7 +509,7 @@ $('patchForm').onsubmit=e=>{
  recommendation:$('recommendation').value.trim(),status:$('status').value,owner:$('owner').value,publishedDate:'',discoveredDate:'',patchName:''});
  patches.unshift(p);selectedId=p.id;save();e.target.reset();render();
 };
-['search','priorityFilter','categoryFilter','patchFilter','benchP1','benchP2','benchP3','benchP4','fPriority','fPatch','fProduct','fSeverity','fAffected','fCategory','fExploit','fPatchAvail','fBenchmark','fAction','fStatus','fOwner'].forEach(id=>{if($(id))$(id).oninput=render});
+['search','priorityFilter','categoryFilter','patchFilter','benchP1','benchP2','benchP3','benchP4','fPriority','fPatch','fProduct','fResource','fSeverity','fAffected','fCategory','fExploit','fPatchAvail','fBenchmark','fAction','fStatus','fOwner'].forEach(id=>{if($(id))$(id).oninput=render});
 $('clearBtn').onclick=()=>{if(confirm('Clear all imported and manual patch data?')){patches=[];selectedId=null;save();render();$('importStatus').textContent='All data cleared.'}};
 $('exportCsvBtn').onclick=()=>downloadCSV(filtered(),'Patch_Operation_Priority.csv');
 $('exportExcelBtn').onclick=exportExcel;
