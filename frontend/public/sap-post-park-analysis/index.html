@@ -66,7 +66,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <select id="accessFilter"><option value="">All access</option><option value="BOTH">Post + Park</option><option value="POST">Post only</option><option value="PARK">Park only</option></select>
 <select id="stateFilter"><option value="">All account state</option><option>Active</option><option>Locked</option><option>Expired</option></select>
 <button id="exportCsvBtn" type="button">📤 Export Review CSV</button>
-<button id="exportExcelBtn" type="button">📊 Export Excel by Sheet</button>
+<button id="exportExcelBtn" type="button">📊 Export 2-Sheet SAP Excel</button>
 </div>
 
 <div class="table-wrap"><table><thead>
@@ -172,6 +172,7 @@ function rawRecord(row,access,sheetName,profile={}){
    fullName:fullnameFrom(row)||profile.fullName||'',
    access:access||accessFrom(row,sheetName)||classifyAccess(tcode,sheetName,typeText),
    tcode,
+   typeText,
    role:roleFrom(row),
    lockRaw:lockFrom(row)||profile.lockRaw||'',
    lockReason:reasonFrom(row)||profile.lockReason||'',
@@ -257,7 +258,7 @@ async function importFile(file){
      for(const tc of tcs){
        joined.push({
          username:a.username,fullName:profile.fullName||'',access:classifyAccess(tc,a.sheetName,''),
-         tcode:tc,role:a.role,lockRaw:profile.lockRaw||'',lockReason:profile.lockReason||'',
+         tcode:tc,typeText:'',role:a.role,lockRaw:profile.lockRaw||'',lockReason:profile.lockReason||'',
          validFrom:a.validFrom||profile.validFrom||'',validTo:a.validTo||profile.validTo||'',
          userType:profile.userType||'',department:profile.department||'',sourceSheet:a.sheetName+' + role mapping'
        });
@@ -342,10 +343,66 @@ function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Fu
 function downloadCsv(){
  const rows=exportRows(filtered());if(!rows.length)return alert('No data to export.');const h=Object.keys(rows[0]);const text=[h.join(','),...rows.map(r=>h.map(k=>csvEscape(r[k])).join(','))].join('\r\n');const b=new Blob([text],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SAP_Post_Park_Access_Review.csv';a.click();URL.revokeObjectURL(a.href);
 }
+function tcodeTypeText(tc,access){
+ const k=String(tc||'').toUpperCase();
+ const known={
+  'F-02':'Enter G/L Account Posting',
+  'F-04':'Post with Clearing',
+  'FB01':'Post Document',
+  'FB05':'Post with Clearing',
+  'FB11':'Post Parked Document',
+  'FB50':'G/L Account Posting',
+  'FBR2':'Post with Reference',
+  'FV50':'Park G/L Account Items',
+  'ZFTM_E01':'Custom Posting Transaction',
+  'ZFTM_E03':'GL Excel Upload'
+ };
+ return known[k]||(access==='Park'?'Parking transaction':'Posting transaction');
+}
+function sapExportRows(access){
+ const out=[];
+ users.forEach(u=>{
+   const tcodes=access==='Post'?(u.postTcodes||[]):(u.parkTcodes||[]);
+   tcodes.filter(tc=>tc&&tc!=='(access detected)').forEach(tc=>{
+     let typeText='';
+     const src=(u.sourceRows||[]).find(r=>r.tcode===tc && r.access===access);
+     if(src&&src.typeText)typeText=src.typeText;
+     if(!typeText)typeText=tcodeTypeText(tc,access);
+     out.push({
+       'User name':u.username,
+       'Full Name':u.fullName||'',
+       'Locked':u.accountState==='Locked'?'X':'',
+       'Reason for User Lock':u.lockReason||'',
+       'Tcode':tc,
+       'Type':typeText,
+       'Valid From':u.validFrom||'',
+       'Valid To':u.validTo||'',
+       'User Type':u.userType||''
+     });
+   });
+ });
+ return out.sort((a,b)=>String(a['User name']).localeCompare(String(b['User name']))||String(a.Tcode).localeCompare(String(b.Tcode)));
+}
+function styleSapSheet(ws,title){
+ XLSX.utils.sheet_add_aoa(ws,[[title]],{origin:'A1'});
+ if(!ws['!merges'])ws['!merges']=[];
+ ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:8}});
+ ws['!cols']=[{wch:14},{wch:24},{wch:10},{wch:28},{wch:14},{wch:32},{wch:14},{wch:14},{wch:16}];
+}
 function exportExcel(){
  if(!window.XLSX)return alert('Excel library could not load.');
- const wb=XLSX.utils.book_new();const groups=[['All_Users',users],['Post_Park_Conflicts',users.filter(u=>u.access==='BOTH')],['Post_Only',users.filter(u=>u.access==='POST')],['Park_Only',users.filter(u=>u.access==='PARK')],['Locked_Expired',users.filter(u=>u.accountState!=='Active')]];
- groups.forEach(([name,list])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(exportRows(list).length?exportRows(list):[{Message:'No records'}]),name));XLSX.writeFile(wb,'SAP_Post_Park_Analysis.xlsx');
+ const post=sapExportRows('Post'), park=sapExportRows('Park');
+ const wb=XLSX.utils.book_new();
+
+ const postWs=XLSX.utils.json_to_sheet(post,{origin:'A2'});
+ styleSapSheet(postWs,'Staff Authorised for Entry Posting');
+ XLSX.utils.book_append_sheet(wb,postWs,'Staff authorised for posting');
+
+ const parkWs=XLSX.utils.json_to_sheet(park,{origin:'A2'});
+ styleSapSheet(parkWs,'Staff Authorised for Entry Parking');
+ XLSX.utils.book_append_sheet(wb,parkWs,'Staff authorised for parking');
+
+ XLSX.writeFile(wb,'SAP_Post_and_Park_User_List.xlsx');
 }
 $('sapFile').onchange=async e=>{
  const file=e.target.files?.[0];if(!file)return;
