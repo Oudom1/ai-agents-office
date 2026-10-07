@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SAP Post & Park Analysis Portal</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{color-scheme:dark;--bg:#07111c;--panel:#0d1b2a;--line:#24435d;--text:#eaf7ff;--muted:#8ba5b9;--accent:#60d7ff}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#06101a,#0b1a2a 50%,#07111c);color:var(--text)}
+header{position:sticky;top:0;z-index:5;padding:18px 24px;border-bottom:1px solid var(--line);background:#07111ce8;backdrop-filter:blur(12px);display:flex;justify-content:space-between;align-items:center;gap:20px}
+h1{margin:0;font-size:22px}header p{margin:4px 0 0;color:var(--muted);font-size:12px}.status{font-size:12px;color:#8fffc0}
+main{max-width:1700px;margin:auto;padding:22px}.grid{display:grid;grid-template-columns:390px 1fr;gap:18px}.panel{background:linear-gradient(180deg,#0e2031,#0a1825);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 16px 40px #0005}
+h2{margin:0 0 12px;font-size:16px}.muted{color:var(--muted);font-size:12px;line-height:1.5}
+label{display:block;font-size:11px;color:#9fc0d5;margin:10px 0 5px}input,select,textarea{width:100%;background:#07131f;border:1px solid #2b4d68;border-radius:8px;color:#eaf7ff;padding:9px 10px;font:inherit}textarea{min-height:70px;resize:vertical}.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;border-radius:8px;padding:10px 12px;font-weight:700;cursor:pointer;display:inline-block}button:hover,.file-label:hover{filter:brightness(1.12)}.secondary{background:#101d29}.file-label input{display:none}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.toolbar input,.toolbar select{width:auto;min-width:145px;flex:1}.toolbar button{white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}.metric{padding:13px;border:1px solid var(--line);border-radius:12px;background:#0a1724}.metric b{font-size:22px;display:block}.metric span{font-size:10px;color:var(--muted);text-transform:uppercase}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:600px}table{width:100%;border-collapse:collapse;min-width:1550px}th,td{text-align:left;padding:10px;border-bottom:1px solid #173249;font-size:11px;vertical-align:top}th{position:sticky;top:0;background:#102536;color:#a8cada;z-index:2}.filter-row th{top:34px;padding:6px;background:#0b1d2c}.filter-row input,.filter-row select{min-width:90px;padding:6px 7px;font-size:10px}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800;white-space:nowrap}.HIGH{background:#5f1221;color:#ffd6dd}.MEDIUM{background:#5a2d14;color:#ffd9bd}.LOW{background:#174532;color:#bdffd9}.INFO{background:#263746;color:#cedce6}.BOTH{background:#5f1221;color:#ffd6dd}.POST{background:#5a2d14;color:#ffd9bd}.PARK{background:#174532;color:#bdffd9}.NONE{background:#263746;color:#cedce6}
+.click{cursor:pointer}.click:hover{background:#10283b}.detail{margin-top:14px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.box{padding:11px;border:1px solid var(--line);border-radius:10px;background:#0a1724}.box b{display:block;font-size:10px;color:#8fb7cc;margin-bottom:5px;text-transform:uppercase}.box span{font-size:12px;white-space:pre-wrap}.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.small{font-size:10px;color:var(--muted)}
+.import-box{border:1px dashed #38617d;border-radius:10px;padding:12px;margin-bottom:14px;background:#0a1724}.import-status{margin-top:8px;font-size:11px;color:#8fffc0}.legend{margin-top:10px;font-size:11px;color:#91a9ba;line-height:1.5}.summary-box{margin-top:12px;padding:12px;border:1px solid #315878;border-radius:10px;background:#0b1d2c}.summary-box h3{margin:0 0 8px;font-size:12px}.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.summary-grid div{font-size:11px;color:#9fc0d5}.detail-hero{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}.detail-hero h2{font-size:20px;margin-bottom:4px}.full-detail{max-width:1500px;margin:auto}.full-detail .detail-grid{grid-template-columns:repeat(3,1fr)}.tcodes{line-height:1.55;word-break:break-word}
+@media(max-width:1150px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div><h1>🛡 SAP Post & Park Analysis Portal</h1><p>Import SAP access export → identify Post/Park access → detect SoD conflicts → review users → export audit files</p></div><div class="status">● AI Agents Office Security Workspace • SAP Access Review</div></header>
+<main>
+<div class="grid">
+<section class="panel">
+<div class="import-box">
+<h2>1. Import SAP Post / Park File</h2>
+<p class="muted">Flexible importer: supports your two-sheet SAP workbook with separate posting and parking sheets, or a normalized CSV/XLSX containing User, Access Type and T-Code.</p>
+<label>Import Mode</label>
+<select id="importMode"><option value="replace" selected>Replace existing analysis</option><option value="append">Append to existing analysis</option></select>
+<label class="file-label">📥 Choose Excel / CSV<input type="file" id="sapFile" accept=".xlsx,.xls,.csv,text/csv"></label>
+<div id="importStatus" class="import-status">No SAP file imported yet.</div>
+<div class="legend">Risk rule: a user with both Post and Park access is flagged as a potential Segregation of Duties (SoD) conflict. Locked or expired accounts are shown separately for review.</div>
+<div class="summary-box">
+<h3>Analysis Rules</h3>
+<div class="summary-grid">
+<div>🔴 Both Post + Park → High</div><div>🟠 Post only → Medium</div>
+<div>🟢 Park only → Low</div><div>⚪ Locked/Expired → Informational review</div>
+</div>
+</div>
+</div>
+
+<h2>2. Manual SAP Access Entry</h2>
+<form id="sapForm">
+<div class="two"><div><label>User ID</label><input id="userId" required placeholder="SAP username"></div><div><label>Full Name</label><input id="fullName" placeholder="Employee name"></div></div>
+<div class="two"><div><label>Access Type</label><select id="accessType"><option>Post</option><option>Park</option></select></div><div><label>T-Code</label><input id="tcode" placeholder="FB50 / FV50 / F-02 ..."></div></div>
+<div class="two"><div><label>Lock Status</label><select id="lockStatus"><option>Unlocked</option><option>Locked</option></select></div><div><label>User Type</label><input id="userType" placeholder="Dialog / Service"></div></div>
+<div class="two"><div><label>Valid From</label><input id="validFrom" type="date"></div><div><label>Valid To</label><input id="validTo" type="date"></div></div>
+<label>Department / Remark</label><input id="department" placeholder="Finance / Accounting / remark">
+<div class="two"><div><label>Review Status</label><select id="reviewStatus"><option>New</option><option>Under Review</option><option>Approved</option><option>Remediation Required</option><option>Remediated</option></select></div><div><label>Owner</label><select id="owner"><option>Sam - System Admin</option><option>Mina - Security</option><option>Alex - Manager</option><option>Lina - QA</option><option>Kai - Implementation</option></select></div></div>
+<div class="actions"><button type="submit">Add & Analyze</button><button type="button" class="secondary" id="clearBtn">Clear All Data</button></div>
+</form>
+</section>
+
+<section>
+<div class="metrics" id="metrics"></div>
+<div class="panel">
+<div class="toolbar">
+<input id="search" placeholder="Search user, name, T-code...">
+<select id="riskFilter"><option value="">All risk</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
+<select id="accessFilter"><option value="">All access</option><option value="BOTH">Post + Park</option><option value="POST">Post only</option><option value="PARK">Park only</option></select>
+<select id="stateFilter"><option value="">All account state</option><option>Active</option><option>Locked</option><option>Expired</option></select>
+<button id="exportCsvBtn" type="button">📤 Export Review CSV</button>
+<button id="exportExcelBtn" type="button">📊 Export Excel by Sheet</button>
+</div>
+
+<div class="table-wrap"><table><thead>
+<tr><th>Risk</th><th>User ID</th><th>Full Name</th><th>Access</th><th>Posting T-Codes</th><th>Parking T-Codes</th><th>Account State</th><th>Validity</th><th>User Type</th><th>Finding</th><th>Review Status</th><th>Owner</th></tr>
+<tr class="filter-row">
+<th><select id="fRisk"><option value="">All</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select></th>
+<th><input id="fUser" placeholder="User..."></th>
+<th><input id="fName" placeholder="Name..."></th>
+<th><select id="fAccess"><option value="">All</option><option value="BOTH">Post + Park</option><option value="POST">Post only</option><option value="PARK">Park only</option></select></th>
+<th><input id="fPost" placeholder="T-code..."></th>
+<th><input id="fPark" placeholder="T-code..."></th>
+<th><select id="fState"><option value="">All</option><option>Active</option><option>Locked</option><option>Expired</option></select></th>
+<th><input id="fValidity" placeholder="Valid to..."></th>
+<th><input id="fType" placeholder="Type..."></th>
+<th><input id="fFinding" placeholder="Finding..."></th>
+<th><select id="fReview"><option value="">All</option><option>New</option><option>Under Review</option><option>Approved</option><option>Remediation Required</option><option>Remediated</option></select></th>
+<th><input id="fOwner" placeholder="Owner..."></th>
+</tr>
+</thead><tbody id="rows"></tbody></table></div>
+<div class="detail panel" id="detail" style="display:none"></div>
+</div>
+</section>
+</div>
+</main>
+<script>
+const KEY='ai-office-sap-post-park-v1';
+let users=JSON.parse(localStorage.getItem(KEY)||'[]');
+let selectedId=users[0]?.id;
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const clean=v=>String(v??'').trim();
+const normKey=s=>clean(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+function save(){localStorage.setItem(KEY,JSON.stringify(users))}
+function findVal(row,names){
+ const entries=Object.entries(row||{});
+ for(const n of names){const nn=normKey(n);const hit=entries.find(([k])=>normKey(k)===nn||normKey(k).includes(nn));if(hit)return clean(hit[1]);}
+ return '';
+}
+function dateValue(v){
+ if(!v)return'';
+ if(typeof v==='number'&&window.XLSX){const d=XLSX.SSF.parse_date_code(v);if(d)return [d.y,String(d.m).padStart(2,'0'),String(d.d).padStart(2,'0')].join('-')}
+ const s=clean(v);const d=new Date(s);return Number.isFinite(d.getTime())?d.toISOString().slice(0,10):s;
+}
+function isLocked(v){
+ const s=clean(v).toLowerCase();
+ return s==='x'||s==='yes'||s==='true'||s==='locked'||s==='1'||s.includes('lock');
+}
+function tcodeFrom(row){
+ return findVal(row,['T-code','Tcode','Transaction Code','Transaction','T Code','T-Code(s)','Role/T-Code','Role']);
+}
+function usernameFrom(row){return findVal(row,['User name','Username','User ID','User','SAP User','SAP Username','Account'])}
+function fullnameFrom(row){return findVal(row,['Full Name','Name','User Full Name','Display Name'])}
+function userTypeFrom(row){return findVal(row,['User Type','Type','User type'])}
+function validFromFrom(row){return dateValue(findVal(row,['Valid From','Validity From','From Date']))}
+function validToFrom(row){return dateValue(findVal(row,['Valid To','Validity To','To Date','Valid until']))}
+function lockFrom(row){return findVal(row,['Lock status','Locked','User Lock','Lock','Status'])}
+function departmentFrom(row){return findVal(row,['Department','Org Unit','Business Unit','Remark','Description'])}
+function accessFrom(row, sheetName=''){
+ let v=findVal(row,['Access Type','Access','Permission','Action']).toLowerCase();
+ const sh=sheetName.toLowerCase();
+ if(v.includes('park')||sh.includes('park'))return'Park';
+ if(v.includes('post')||sh.includes('post'))return'Post';
+ return'';
+}
+function parseCsv(text){
+ const rows=[];let row=[],cell='',q=false;
+ for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];if(c==='"'&&q&&n==='"'){cell+='"';i++;}else if(c==='"'){q=!q;}else if(c===','&&!q){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&n==='\n')i++;row.push(cell);cell='';if(row.some(x=>clean(x)!==''))rows.push(row);row=[];}else cell+=c}
+ if(cell||row.length){row.push(cell);rows.push(row)}
+ const h=(rows.shift()||[]).map(clean);return rows.map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]??''])));
+}
+function rawRecord(row,access,sheetName){
+ const username=usernameFrom(row); if(!username)return null;
+ return{username,fullName:fullnameFrom(row),access:access||accessFrom(row,sheetName),tcode:tcodeFrom(row),lockRaw:lockFrom(row),validFrom:validFromFrom(row),validTo:validToFrom(row),userType:userTypeFrom(row),department:departmentFrom(row),sourceSheet:sheetName};
+}
+function aggregate(records, append=false){
+ const existing=append?users.map(u=>({...u,postTcodes:[...(u.postTcodes||[])],parkTcodes:[...(u.parkTcodes||[])],sourceRows:[...(u.sourceRows||[])]})):[];
+ const map=new Map(existing.map(u=>[u.username.toLowerCase(),u]));
+ for(const r of records){
+  if(!r||!r.username)continue;const k=r.username.toLowerCase();
+  let u=map.get(k);
+  if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],lockRaw:r.lockRaw||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
+  if(!u.fullName&&r.fullName)u.fullName=r.fullName;if(!u.department&&r.department)u.department=r.department;if(!u.userType&&r.userType)u.userType=r.userType;if(!u.lockRaw&&r.lockRaw)u.lockRaw=r.lockRaw;if(!u.validFrom&&r.validFrom)u.validFrom=r.validFrom;if(!u.validTo&&r.validTo)u.validTo=r.validTo;
+  if(r.access==='Post'&&r.tcode&&!u.postTcodes.includes(r.tcode))u.postTcodes.push(r.tcode);
+  if(r.access==='Park'&&r.tcode&&!u.parkTcodes.includes(r.tcode))u.parkTcodes.push(r.tcode);
+  if(r.access==='Post'&&!r.tcode&&!u.postTcodes.includes('(access detected)'))u.postTcodes.push('(access detected)');
+  if(r.access==='Park'&&!r.tcode&&!u.parkTcodes.includes('(access detected)'))u.parkTcodes.push('(access detected)');
+  u.sourceRows.push(r);
+ }
+ users=[...map.values()].map(analyzeUser);
+}
+function accountState(u){
+ if(isLocked(u.lockRaw))return'Locked';
+ if(u.validTo){const d=new Date(u.validTo);if(Number.isFinite(d.getTime())&&d<new Date(new Date().toDateString()))return'Expired'}
+ return'Active';
+}
+function analyzeUser(u){
+ const hasPost=(u.postTcodes||[]).length>0,hasPark=(u.parkTcodes||[]).length>0,state=accountState(u);
+ let access=hasPost&&hasPark?'BOTH':hasPost?'POST':hasPark?'PARK':'NONE';
+ let risk='INFO',finding='No Post/Park access detected.',recommendation='Confirm whether this account is in scope for the SAP Post/Park review.';
+ if(state!=='Active'){risk='INFO';finding='Account is '+state.toLowerCase()+'. Access should be validated before retaining it.';recommendation='Verify account lifecycle status and remove unnecessary SAP roles/access if no longer required.'}
+ else if(access==='BOTH'){risk='HIGH';finding='Potential SoD conflict: the same SAP user has both Posting and Parking access.';recommendation='Validate business need. Separate park and post duties where possible, or document approved compensating controls and periodic review.'}
+ else if(access==='POST'){risk='MEDIUM';finding='User has Posting access.';recommendation='Confirm posting privilege is required for the role, company code and business process. Apply least privilege.'}
+ else if(access==='PARK'){risk='LOW';finding='User has Parking access only.';recommendation='Confirm parking privilege remains required and is limited to the appropriate business scope.'}
+ return {...u,access,risk,accountState:state,finding,recommendation};
+}
+async function importFile(file){
+ const ext=file.name.toLowerCase();
+ let records=[];
+ if(ext.endsWith('.csv')){
+  const rows=parseCsv(await file.text());records=rows.map(r=>rawRecord(r,accessFrom(r,''),'CSV')).filter(Boolean);
+ }else{
+  if(!window.XLSX)throw new Error('Excel library could not load');
+  const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:false});
+  for(const sheetName of wb.SheetNames){
+   const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:'',raw:true});
+   for(const row of rows){const rec=rawRecord(row,accessFrom(row,sheetName),sheetName);if(rec)records.push(rec)}
+  }
+ }
+ return records;
+}
+function filtered(){
+ const q=$('search').value.toLowerCase(),rf=$('riskFilter').value,af=$('accessFilter').value,sf=$('stateFilter').value;
+ const fr=$('fRisk').value,fu=$('fUser').value.toLowerCase(),fn=$('fName').value.toLowerCase(),fa=$('fAccess').value,fp=$('fPost').value.toLowerCase(),fk=$('fPark').value.toLowerCase(),fs=$('fState').value,fv=$('fValidity').value.toLowerCase(),ft=$('fType').value.toLowerCase(),ff=$('fFinding').value.toLowerCase(),frv=$('fReview').value,fo=$('fOwner').value.toLowerCase();
+ return users.filter(u=>(!q||[u.username,u.fullName,u.department,...u.postTcodes,...u.parkTcodes].join(' ').toLowerCase().includes(q))&&(!rf||u.risk===rf)&&(!af||u.access===af)&&(!sf||u.accountState===sf)&&(!fr||u.risk===fr)&&(!fu||u.username.toLowerCase().includes(fu))&&(!fn||u.fullName.toLowerCase().includes(fn))&&(!fa||u.access===fa)&&(!fp||u.postTcodes.join(' ').toLowerCase().includes(fp))&&(!fk||u.parkTcodes.join(' ').toLowerCase().includes(fk))&&(!fs||u.accountState===fs)&&(!fv||String(u.validTo||'').toLowerCase().includes(fv))&&(!ft||u.userType.toLowerCase().includes(ft))&&(!ff||u.finding.toLowerCase().includes(ff))&&(!frv||u.reviewStatus===frv)&&(!fo||u.owner.toLowerCase().includes(fo))).sort((a,b)=>({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[b.risk]-({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[a.risk]))||a.username.localeCompare(b.username));
+}
+function accessLabel(u){return u.access==='BOTH'?'Post + Park':u.access==='POST'?'Post only':u.access==='PARK'?'Park only':'None'}
+function render(){
+ const list=filtered();
+ $('rows').innerHTML=list.map(u=>`<tr class="click" data-id="${u.id}">
+ <td><span class="badge ${u.risk}">${esc(u.risk)}</span></td>
+ <td><b>${esc(u.username)}</b><div class="small">${esc(u.department||'')}</div></td>
+ <td>${esc(u.fullName||'-')}</td>
+ <td><span class="badge ${u.access}">${esc(accessLabel(u))}</span></td>
+ <td class="tcodes">${esc(u.postTcodes.join(', ')||'-')}</td>
+ <td class="tcodes">${esc(u.parkTcodes.join(', ')||'-')}</td>
+ <td>${esc(u.accountState)}</td>
+ <td><div class="small">From: ${esc(u.validFrom||'-')}</div><div class="small">To: ${esc(u.validTo||'-')}</div></td>
+ <td>${esc(u.userType||'-')}</td>
+ <td>${esc(u.finding)}</td><td>${esc(u.reviewStatus)}</td><td>${esc(u.owner)}</td></tr>`).join('')||'<tr><td colspan="12">No matching SAP access records.</td></tr>';
+ document.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>window.location.href=window.location.pathname+'?user='+encodeURIComponent(r.dataset.id));
+ const both=users.filter(u=>u.access==='BOTH').length,post=users.filter(u=>u.access==='POST').length,park=users.filter(u=>u.access==='PARK').length,locked=users.filter(u=>u.accountState==='Locked').length,expired=users.filter(u=>u.accountState==='Expired').length;
+ $('metrics').innerHTML=[['Total Users',users.length],['Post + Park',both],['Post Only',post],['Park Only',park],['Locked',locked],['Expired',expired]].map(([a,b])=>`<div class="metric"><b>${b}</b><span>${a}</span></div>`).join('');
+ renderDetail();
+}
+function renderDetail(){
+ const u=users.find(x=>x.id===selectedId);if(!u){$('detail').style.display='none';return}$('detail').style.display='block';
+ $('detail').innerHTML=`<h2>${esc(u.username)} • SAP Access Analysis</h2><div class="detail-grid">
+ <div class="box"><b>Risk</b><span>${esc(u.risk)}\n${esc(accessLabel(u))}</span></div>
+ <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}</span></div>
+ <div class="box"><b>Review Status / Owner</b><span>${esc(u.reviewStatus)}\n${esc(u.owner)}</span></div>
+ <div class="box"><b>User</b><span>${esc(u.username)}\n${esc(u.fullName||'-')}\n${esc(u.department||'-')}</span></div>
+ <div class="box"><b>Validity</b><span>From: ${esc(u.validFrom||'-')}\nTo: ${esc(u.validTo||'-')}</span></div>
+ <div class="box"><b>User Type</b><span>${esc(u.userType||'-')}</span></div>
+ <div class="box"><b>Posting T-Codes</b><span>${esc(u.postTcodes.join('\n')||'-')}</span></div>
+ <div class="box"><b>Parking T-Codes</b><span>${esc(u.parkTcodes.join('\n')||'-')}</span></div>
+ <div class="box"><b>Source Rows</b><span>${esc((u.sourceRows||[]).length)} imported records</span></div>
+ <div class="box" style="grid-column:1/-1"><b>Finding</b><span>${esc(u.finding)}</span></div>
+ <div class="box" style="grid-column:1/-1"><b>Recommended Action</b><span>${esc(u.recommendation)}</span></div>
+ </div><div class="actions"><button onclick="advance('${u.id}')">Advance Review</button><button class="secondary" onclick="markRemediation('${u.id}')">Require Remediation</button><button class="secondary" onclick="removeUser('${u.id}')">Delete</button></div>`;
+}
+function renderFullUser(u){
+ document.querySelector('main').innerHTML=`<section class="panel full-detail">
+ <div class="detail-hero"><div><h2>${esc(u.username)} • SAP Post & Park Review</h2><p class="muted">${esc(u.fullName||'')} • ${esc(u.department||'')}</p></div><button class="secondary" onclick="window.location.href=window.location.pathname">← Back to User List</button></div>
+ <div class="detail-grid">
+ <div class="box"><b>Risk</b><span>${esc(u.risk)}\n${esc(accessLabel(u))}</span></div>
+ <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}</span></div>
+ <div class="box"><b>Review Status / Owner</b><span>${esc(u.reviewStatus)}\n${esc(u.owner)}</span></div>
+ <div class="box"><b>User</b><span>${esc(u.username)}\n${esc(u.fullName||'-')}</span></div>
+ <div class="box"><b>Department / Remark</b><span>${esc(u.department||'-')}</span></div>
+ <div class="box"><b>User Type</b><span>${esc(u.userType||'-')}</span></div>
+ <div class="box"><b>Validity</b><span>From: ${esc(u.validFrom||'-')}\nTo: ${esc(u.validTo||'-')}</span></div>
+ <div class="box"><b>Posting T-Codes</b><span>${esc(u.postTcodes.join('\n')||'-')}</span></div>
+ <div class="box"><b>Parking T-Codes</b><span>${esc(u.parkTcodes.join('\n')||'-')}</span></div>
+ <div class="box" style="grid-column:1/-1"><b>SoD / Access Finding</b><span>${esc(u.finding)}</span></div>
+ <div class="box" style="grid-column:1/-1"><b>Recommended Remediation</b><span>${esc(u.recommendation)}</span></div>
+ <div class="box" style="grid-column:1/-1"><b>Audit Guidance</b><span>Validate access against job responsibility, role owner approval, company-code scope and least-privilege requirements. For Post + Park conflicts, document the approved business justification or remove one side of the conflicting access.</span></div>
+ </div><div class="actions"><button onclick="advance('${u.id}');location.reload()">Advance Review</button><button class="secondary" onclick="markRemediation('${u.id}');location.reload()">Require Remediation</button></div>
+ </section>`;
+}
+function advance(id){const order=['New','Under Review','Approved','Remediation Required','Remediated'];const u=users.find(x=>x.id===id);if(!u)return;const i=order.indexOf(u.reviewStatus);u.reviewStatus=order[Math.min(order.length-1,Math.max(0,i)+1)];save();render()}
+function markRemediation(id){const u=users.find(x=>x.id===id);if(!u)return;u.reviewStatus='Remediation Required';save();render()}
+function removeUser(id){users=users.filter(x=>x.id!==id);selectedId=users[0]?.id;save();render()}
+function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Full_Name:u.fullName,Department:u.department,Access:accessLabel(u),Posting_TCodes:u.postTcodes.join('; '),Parking_TCodes:u.parkTcodes.join('; '),Account_State:u.accountState,Lock_Status:u.lockRaw,Valid_From:u.validFrom,Valid_To:u.validTo,User_Type:u.userType,Finding:u.finding,Recommendation:u.recommendation,Review_Status:u.reviewStatus,Owner:u.owner}))}
+function downloadCsv(){
+ const rows=exportRows(filtered());if(!rows.length)return alert('No data to export.');const h=Object.keys(rows[0]);const text=[h.join(','),...rows.map(r=>h.map(k=>csvEscape(r[k])).join(','))].join('\r\n');const b=new Blob([text],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SAP_Post_Park_Access_Review.csv';a.click();URL.revokeObjectURL(a.href);
+}
+function exportExcel(){
+ if(!window.XLSX)return alert('Excel library could not load.');
+ const wb=XLSX.utils.book_new();const groups=[['All_Users',users],['Post_Park_Conflicts',users.filter(u=>u.access==='BOTH')],['Post_Only',users.filter(u=>u.access==='POST')],['Park_Only',users.filter(u=>u.access==='PARK')],['Locked_Expired',users.filter(u=>u.accountState!=='Active')]];
+ groups.forEach(([name,list])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(exportRows(list).length?exportRows(list):[{Message:'No records'}]),name));XLSX.writeFile(wb,'SAP_Post_Park_Analysis.xlsx');
+}
+$('sapFile').onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{const recs=await importFile(file);if(!recs.length){$('importStatus').textContent='Import failed: no user records detected. Check the header names.';return}
+ aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;$('importStatus').textContent=`Imported ${recs.length} SAP access rows from ${file.name}. Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.`;render();
+ }catch(err){$('importStatus').textContent='Import failed: '+err.message}
+};
+$('sapForm').onsubmit=e=>{
+ e.preventDefault();const rec={username:$('userId').value.trim(),fullName:$('fullName').value.trim(),access:$('accessType').value,tcode:$('tcode').value.trim(),lockRaw:$('lockStatus').value==='Locked'?'Locked':'',validFrom:$('validFrom').value,validTo:$('validTo').value,userType:$('userType').value.trim(),department:$('department').value.trim(),sourceSheet:'Manual'};
+ aggregate([rec],true);const u=users.find(x=>x.username.toLowerCase()===rec.username.toLowerCase());if(u){u.reviewStatus=$('reviewStatus').value;u.owner=$('owner').value;Object.assign(u,analyzeUser(u));selectedId=u.id}save();e.target.reset();render();
+};
+['search','riskFilter','accessFilter','stateFilter','fRisk','fUser','fName','fAccess','fPost','fPark','fState','fValidity','fType','fFinding','fReview','fOwner'].forEach(id=>$(id).oninput=render);
+$('clearBtn').onclick=()=>{if(confirm('Clear all SAP Post/Park analysis data?')){users=[];selectedId=null;save();render();$('importStatus').textContent='All data cleared.'}};
+$('exportCsvBtn').onclick=downloadCsv;$('exportExcelBtn').onclick=exportExcel;
+const requested=new URLSearchParams(window.location.search).get('user');if(requested){const u=users.find(x=>x.id===requested);if(u)renderFullUser(u);else render()}else render();
+</script>
+</body>
+</html>
