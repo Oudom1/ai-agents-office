@@ -129,12 +129,19 @@ function departmentFrom(row){return findVal(row,['Department','Org Unit','Busine
 
 function classifyAccess(tcode='',sheetName='',typeText=''){
  const tc=clean(tcode).toUpperCase();
- const hint=(sheetName+' '+typeText).toLowerCase();
- if(hint.includes('parking')||hint.includes(' park ')||hint.startsWith('park')||/\bpark\b/.test(hint))return'Park';
- if(hint.includes('posting')||hint.includes(' post ')||hint.startsWith('post')||/\bpost\b/.test(hint))return'Post';
+
+ // T-code classification has highest priority.
+ // FV* transactions are parking transactions and must go to the Parking sheet
+ // even when the source worksheet itself is named "posting".
  if(/^FV/.test(tc))return'Park';
+
  const postingCodes=['F-02','F-04','FB01','FB05','FB11','FB50','FBR2','ZFTM_E01','ZFTM_E03'];
  if(postingCodes.includes(tc))return'Post';
+
+ // Only use description / worksheet name as a fallback for unknown T-codes.
+ const hint=(typeText+' '+sheetName).toLowerCase();
+ if(hint.includes('parking')||hint.includes(' park ')||hint.startsWith('park')||/\bpark\b/.test(hint))return'Park';
+ if(hint.includes('posting')||hint.includes(' post ')||hint.startsWith('post')||/\bpost\b/.test(hint))return'Post';
  return'';
 }
 function accessFrom(row,sheetName=''){
