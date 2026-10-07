@@ -19,7 +19,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:600px}table{width:100%;border-collapse:collapse;min-width:1450px}th,td{text-align:left;padding:10px;border-bottom:1px solid #173249;font-size:11px;vertical-align:top}th{position:sticky;top:0;background:#102536;color:#a8cada;z-index:2}
 .sev,.prio{display:inline-block;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800;white-space:nowrap}.Critical,.P1{background:#5f1221;color:#ffd6dd}.High,.P2{background:#5a2d14;color:#ffd9bd}.Medium,.P3{background:#594b12;color:#fff0a8}.Low,.P4{background:#174532;color:#bdffd9}.Unknown{background:#263746;color:#cedce6}
 .click{cursor:pointer}.click:hover{background:#10283b}.detail{margin-top:14px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.box{padding:11px;border:1px solid var(--line);border-radius:10px;background:#0a1724}.box b{display:block;font-size:10px;color:#8fb7cc;margin-bottom:5px;text-transform:uppercase}.box span{font-size:12px;white-space:pre-wrap}.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.small{font-size:10px;color:var(--muted)}
-.import-box{border:1px dashed #38617d;border-radius:10px;padding:12px;margin-bottom:14px;background:#0a1724}.import-status{margin-top:8px;font-size:11px;color:#8fffc0}.legend{margin-top:10px;font-size:11px;color:#91a9ba;line-height:1.5}
+.import-box{border:1px dashed #38617d;border-radius:10px;padding:12px;margin-bottom:14px;background:#0a1724}.import-status{margin-top:8px;font-size:11px;color:#8fffc0}.legend{margin-top:10px;font-size:11px;color:#91a9ba;line-height:1.5}.bench-ok{color:#8fffc0}.bench-due{color:#ffd36a}.bench-over{color:#ff8fa1}.benchmark-box{margin-top:12px;padding:12px;border:1px solid #315878;border-radius:10px;background:#0b1d2c}.benchmark-box h3{margin:0 0 8px;font-size:12px}.benchmark-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.benchmark-grid input{padding:7px}.benchmark-grid label{margin-top:0}
 @media(max-width:1150px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
 </style>
 </head>
@@ -34,6 +34,16 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <label class="file-label">📥 Choose CSV<input type="file" id="csvFile" accept=".csv,text/csv"></label>
 <div id="importStatus" class="import-status">No CSV imported yet.</div>
 <div class="legend">Priority rule: CVSS severity + known exploit + patch availability + number of affected computers. P1 is the highest operational priority.</div>
+<div class="benchmark-box">
+<h3>Remediation Benchmark (configurable internal target)</h3>
+<div class="benchmark-grid">
+<div><label>P1 days</label><input id="benchP1" type="number" min="0" value="1"></div>
+<div><label>P2 days</label><input id="benchP2" type="number" min="0" value="3"></div>
+<div><label>P3 days</label><input id="benchP3" type="number" min="0" value="14"></div>
+<div><label>P4 days</label><input id="benchP4" type="number" min="0" value="30"></div>
+</div>
+<div class="legend">Benchmark is measured from Discovered Date. You can replace these defaults with your approved internal SLA.</div>
+</div>
 </div>
 
 <h2>2. Manual Patch Entry</h2>
@@ -61,7 +71,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <button id="exportExcelBtn" type="button">📊 Export Excel by Sheet</button>
 </div>
 
-<div class="table-wrap"><table><thead><tr><th>Priority</th><th>Patch</th><th>Vulnerability / Product</th><th>Severity</th><th>Affected Computers</th><th>Category</th><th>Exploit</th><th>Patch Available</th><th>Action</th><th>Status</th><th>Owner</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Priority</th><th>Patch</th><th>Vulnerability / Product</th><th>Severity</th><th>Affected Computers</th><th>Category</th><th>Exploit</th><th>Patch Available</th><th>Benchmark</th><th>Action</th><th>Status</th><th>Owner</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="detail panel" id="detail" style="display:none"></div>
 </div>
 </section>
@@ -96,6 +106,24 @@ function priorityScore(p){
 }
 function priorityName(score){return score>=75?'P1 - Critical':score>=55?'P2 - High':score>=35?'P3 - Medium':'P4 - Routine'}
 function affectedBand(n){n=Number(n)||0;return n>=100?'Very High (100+ devices)':n>=25?'High (25-99 devices)':n>=10?'Medium (10-24 devices)':n>=1?'Low (1-9 devices)':'Unknown'}
+function benchmarkTargets(){return{
+   P1:Number($('benchP1')?.value)||1,
+   P2:Number($('benchP2')?.value)||3,
+   P3:Number($('benchP3')?.value)||14,
+   P4:Number($('benchP4')?.value)||30
+  }}
+function parseDateSafe(v){const d=new Date(v);return Number.isFinite(d.getTime())?d:null}
+function benchmarkInfo(p){
+ const key=p.priority.slice(0,2),target=benchmarkTargets()[key]??30;
+ const d=parseDateSafe(p.discoveredDate);
+ if(!d)return{targetDays:target,daysOpen:null,overdueDays:null,benchmarkStatus:'No discovery date'};
+ const end=p.status==='Completed'&&p.completedAt?parseDateSafe(p.completedAt):new Date();
+ const days=Math.max(0,Math.floor((end-d)/(1000*60*60*24)));
+ const overdue=Math.max(0,days-target);
+ const remaining=target-days;
+ const status=overdue>0?'Overdue':remaining<=1?'Due Soon':'Within Target';
+ return{targetDays:target,daysOpen:days,overdueDays:overdue,benchmarkStatus:status};
+}
 function operationAction(p){
  const p1=p.priority.startsWith('P1'),p2=p.priority.startsWith('P2'),p3=p.priority.startsWith('P3'),available=String(p.patchAvailability).toLowerCase()==='available';
  if(p1)return available?'Patch within 24h; pilot immediately; monitor and prepare rollback':'No patch: apply mitigation/compensating controls and escalate immediately';
@@ -162,11 +190,12 @@ function render(){
  <td><span class="sev ${esc(p.severity)}">${esc(p.severity)}</span>${p.cvss!==null?'<div class="small">CVSS '+esc(p.cvss)+'</div>':''}</td>
  <td><b>${esc(p.affectedCount)}</b><div class="small">${esc(p.affectedBand)}</div></td>
  <td>${esc(p.category)}</td><td>${esc(p.exploit)}</td><td>${esc(p.patchAvailability)}</td>
+ <td>${(()=>{const b=benchmarkInfo(p);const cls=b.benchmarkStatus==='Overdue'?'bench-over':b.benchmarkStatus==='Due Soon'?'bench-due':'bench-ok';return '<b class="'+cls+'">'+esc(b.benchmarkStatus)+'</b><div class="small">'+(b.daysOpen===null?'No date':b.daysOpen+'d open / '+b.targetDays+'d target'+(b.overdueDays?'<br>'+b.overdueDays+'d overdue':''))+'</div>'})()}</td>
  <td>${esc(p.action)}</td><td>${esc(p.status)}</td><td>${esc(p.owner)}</td></tr>`).join('')||'<tr><td colspan="11">No matching vulnerability records.</td></tr>';
  document.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{selectedId=r.dataset.id;renderDetail()});
  const p1=patches.filter(p=>p.priority.startsWith('P1')).length,p2=patches.filter(p=>p.priority.startsWith('P2')).length;
- const devices=patches.reduce((s,p)=>s+(Number(p.affectedCount)||0),0),sql=patches.filter(p=>p.category==='SQL / Database').length,apps=patches.filter(p=>p.category==='Application').length;
- $('metrics').innerHTML=[['Imported',patches.length],['P1 Critical',p1],['P2 High',p2],['Affected Count',devices],['SQL / DB',sql],['Applications',apps]].map(([a,b])=>`<div class="metric"><b>${b}</b><span>${a}</span></div>`).join('');
+ const devices=patches.reduce((s,p)=>s+(Number(p.affectedCount)||0),0),sql=patches.filter(p=>p.category==='SQL / Database').length,apps=patches.filter(p=>p.category==='Application').length,overdue=patches.filter(p=>benchmarkInfo(p).benchmarkStatus==='Overdue').length;
+ $('metrics').innerHTML=[['Imported',patches.length],['P1 Critical',p1],['P2 High',p2],['Overdue',overdue],['SQL / DB',sql],['Applications',apps]].map(([a,b])=>`<div class="metric"><b>${b}</b><span>${a}</span></div>`).join('');
  renderDetail();
 }
 function renderDetail(){
@@ -178,6 +207,7 @@ function renderDetail(){
  <div class="box"><b>Exploit / Patch</b><span>Exploit: ${esc(p.exploit)}\nPatch: ${esc(p.patchAvailability)}</span></div>
  <div class="box"><b>Published / Discovered</b><span>${esc(p.publishedDate||'-')}\n${esc(p.discoveredDate||'-')}</span></div>
  <div class="box"><b>Status / Owner</b><span>${esc(p.status)}\n${esc(p.owner)}</span></div>
+ <div class="box"><b>Benchmark</b><span>${(()=>{const b=benchmarkInfo(p);return esc(b.benchmarkStatus)+'\n'+(b.daysOpen===null?'No discovery date':b.daysOpen+' days open / '+b.targetDays+' day target'+(b.overdueDays?'\n'+b.overdueDays+' days overdue':''))})()}</span></div>
  <div class="box" style="grid-column:1/-1"><b>Recommended Operation</b><span>${esc(p.action)}</span></div>
  <div class="box" style="grid-column:1/-1"><b>Note</b><span>This source file contains an affected-system count, not hostnames. Import a device-level export later if you need exact computer names/models per patch.</span></div>
  </div><div class="actions"><button onclick="advance('${p.id}')">Advance Status</button><button class="secondary" onclick="removePatch('${p.id}')">Delete</button></div>`;
@@ -192,7 +222,7 @@ function operationRows(list){
   Exploit_Status:p.exploit,Patch_Availability:p.patchAvailability,Patch_ID:p.kb||'',
   Patch_Name:p.patchName||'',CVE:p.cve||'',Vulnerability:p.vulnerability||p.product||'',
   Published_Date:p.publishedDate||'',Discovered_Date:p.discoveredDate||'',
-  Operation_Action:p.action,Status:p.status,Owner:p.owner
+  Benchmark_Status:benchmarkInfo(p).benchmarkStatus,Benchmark_Target_Days:benchmarkInfo(p).targetDays,Days_Open:benchmarkInfo(p).daysOpen??'',Overdue_Days:benchmarkInfo(p).overdueDays??'',Operation_Action:p.action,Status:p.status,Owner:p.owner
  }));
 }
 function downloadCSV(list,name){
@@ -230,7 +260,7 @@ $('patchForm').onsubmit=e=>{
  recommendation:$('recommendation').value.trim(),status:$('status').value,owner:$('owner').value,publishedDate:'',discoveredDate:'',patchName:''});
  patches.unshift(p);selectedId=p.id;save();e.target.reset();render();
 };
-['search','priorityFilter','categoryFilter','patchFilter'].forEach(id=>$(id).oninput=render);
+['search','priorityFilter','categoryFilter','patchFilter','benchP1','benchP2','benchP3','benchP4'].forEach(id=>$(id).oninput=render);
 $('clearBtn').onclick=()=>{if(confirm('Clear all imported and manual patch data?')){patches=[];selectedId=null;save();render();$('importStatus').textContent='All data cleared.'}};
 $('exportCsvBtn').onclick=()=>downloadCSV(filtered(),'Patch_Operation_Priority.csv');
 $('exportExcelBtn').onclick=exportExcel;
