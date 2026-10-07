@@ -124,6 +124,56 @@ function benchmarkInfo(p){
  const status=overdue>0?'Overdue':remaining<=1?'Due Soon':'Within Target';
  return{targetDays:target,daysOpen:days,overdueDays:overdue,benchmarkStatus:status};
 }
+function impactAnalysis(p){
+ const cat=p.category||'Application';
+ const sev=p.severity||'Unknown';
+ const exploited=String(p.exploit).toLowerCase()==='available';
+ const patchAvailable=String(p.patchAvailability).toLowerCase()==='available';
+ const affected=Number(p.affectedCount)||0;
+ let businessImpact='Potential service disruption or user productivity impact depending on the affected product and number of systems.';
+ let technicalImpact='Security weakness may expose affected systems to compromise, instability, privilege abuse, data access, or service interruption depending on the vulnerability.';
+ let patchRisks='Possible regression, application incompatibility, restart requirement, service interruption, or dependency conflict. Validate in a pilot group before broad deployment.';
+ let delayRisks=exploited?'Higher risk because exploit availability is reported. Delaying remediation increases exposure window and should be escalated.':'Exposure remains until remediation or compensating controls are applied.';
+ let compatibility='Check supported versions, dependencies, endpoint security agents, authentication/SSO, VPN, drivers, middleware and business-critical integrations.';
+ let downtime='Assume a maintenance window may be required until vendor documentation confirms otherwise. Check whether reboot/service restart is required.';
+ let rollback='Back up configuration/data where applicable, confirm rollback/uninstall method, test the patch in pilot systems, validate core business functions, and monitor logs after deployment.';
+
+ if(cat==='SQL / Database'){
+   businessImpact='Database patching can affect applications that depend on the database, including transaction processing, reporting, integrations and scheduled jobs.';
+   technicalImpact='Potential impact to database engine stability, connectivity, drivers, stored procedures, replication, clustering, backup jobs and application connection pools.';
+   patchRisks='Risk of query-plan changes, service restart, driver incompatibility, replication issues, failover impact, or application connection failures.';
+   compatibility='Validate DB engine version, client drivers, application connection strings, HA/replication topology, backup tooling and vendor-certified application compatibility.';
+   downtime='Database service restart or failover may be required. Use an approved maintenance window and confirm HA/failover readiness.';
+   rollback='Take a verified backup/snapshot, document current DB build, test restore/failback, validate application connectivity and transactions after patching.';
+ }
+ else if(cat==='Application'){
+   businessImpact='Application users may experience outage, failed transactions, broken features or reduced productivity if the patch causes a compatibility issue.';
+   technicalImpact='May affect application binaries, libraries, plugins, authentication, API integrations, browser compatibility or background services.';
+   patchRisks='Risk of feature regression, plugin/API incompatibility, authentication failure, configuration reset or service restart.';
+   compatibility='Validate supported OS/browser/runtime versions, plugins, SSO, API integrations and critical application workflows.';
+   downtime='Application restart or brief service interruption may be required depending on the vendor patch.';
+   rollback='Capture current application version/configuration, keep installer/package for rollback, test login and key business transactions after deployment.';
+ }
+ else if(cat==='Endpoint / Hardware & OS'){
+   businessImpact='Endpoint patching can interrupt user productivity through reboot, login issues, device-driver problems or business-application incompatibility.';
+   technicalImpact='May affect OS components, kernel, drivers, firmware, authentication, networking, printing, VPN, EDR and device stability.';
+   patchRisks='Risk of boot issues, driver regression, SSO/VPN failure, performance problems, peripheral issues or forced reboot.';
+   compatibility='Validate hardware model, BIOS/firmware prerequisites, drivers, BitLocker, VPN, EDR, Microsoft 365 and line-of-business applications.';
+   downtime='User reboot is commonly required for OS/firmware updates. Schedule outside critical business periods where possible.';
+   rollback='Ensure recovery key/BitLocker readiness, create restore/recovery plan, pilot on representative hardware models and validate login/network/peripherals.';
+ }
+ else if(cat==='Server / Infrastructure'){
+   businessImpact='Infrastructure patching can affect multiple dependent services, users or applications if the server/network component is unavailable.';
+   technicalImpact='Potential impact to service availability, networking, middleware, virtualization, authentication or shared platform dependencies.';
+   patchRisks='Risk of service restart, cluster failover issue, network interruption, middleware incompatibility or dependency outage.';
+   compatibility='Validate HA design, dependent services, middleware versions, network rules, certificates and monitoring before rollout.';
+   downtime='Maintenance window may be required. Use failover or redundancy where available.';
+   rollback='Confirm snapshot/backup, failover procedure, service health checks and rollback commands before implementation.';
+ }
+ if(sev==='Critical') businessImpact='CRITICAL: '+businessImpact;
+ if(affected>=100) businessImpact+=' Large scope: '+affected+' affected systems increases operational impact.';
+ return{businessImpact,technicalImpact,patchRisks,delayRisks,compatibility,downtime,rollback};
+}
 function operationAction(p){
  const p1=p.priority.startsWith('P1'),p2=p.priority.startsWith('P2'),p3=p.priority.startsWith('P3'),available=String(p.patchAvailability).toLowerCase()==='available';
  if(p1)return available?'Patch within 24h; pilot immediately; monitor and prepare rollback':'No patch: apply mitigation/compensating controls and escalate immediately';
@@ -209,6 +259,13 @@ function renderDetail(){
  <div class="box"><b>Status / Owner</b><span>${esc(p.status)}\n${esc(p.owner)}</span></div>
  <div class="box"><b>Benchmark</b><span>${(()=>{const b=benchmarkInfo(p);return esc(b.benchmarkStatus)+'\n'+(b.daysOpen===null?'No discovery date':b.daysOpen+' days open / '+b.targetDays+' day target'+(b.overdueDays?'\n'+b.overdueDays+' days overdue':''))})()}</span></div>
  <div class="box" style="grid-column:1/-1"><b>Recommended Operation</b><span>${esc(p.action)}</span></div>
+ <div class="box"><b>Business Impact</b><span>${esc(impactAnalysis(p).businessImpact)}</span></div>
+ <div class="box"><b>Technical Impact</b><span>${esc(impactAnalysis(p).technicalImpact)}</span></div>
+ <div class="box"><b>Patch Disadvantages / Risks</b><span>${esc(impactAnalysis(p).patchRisks)}</span></div>
+ <div class="box"><b>Risk of Delaying</b><span>${esc(impactAnalysis(p).delayRisks)}</span></div>
+ <div class="box"><b>Compatibility Concerns</b><span>${esc(impactAnalysis(p).compatibility)}</span></div>
+ <div class="box"><b>Downtime / Reboot</b><span>${esc(impactAnalysis(p).downtime)}</span></div>
+ <div class="box" style="grid-column:1/-1"><b>Rollback / Validation Guidance</b><span>${esc(impactAnalysis(p).rollback)}</span></div>
  <div class="box" style="grid-column:1/-1"><b>Note</b><span>This source file contains an affected-system count, not hostnames. Import a device-level export later if you need exact computer names/models per patch.</span></div>
  </div><div class="actions"><button onclick="advance('${p.id}')">Advance Status</button><button class="secondary" onclick="removePatch('${p.id}')">Delete</button></div>`;
 }
