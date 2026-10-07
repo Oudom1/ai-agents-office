@@ -30,8 +30,10 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <div class="grid">
 <section class="panel">
 <div class="import-box">
-<h2>1. Import Vulnerability CSV</h2>
-<p class="muted">Designed for your SoftwareVulnerabilities CSV. The portal maps Vulnerabilities, Affected Systems, Exploit Status, Patch Availability, CVSS 3.0/2.0, dates, Patch ID and Patch Name.</p>
+<h2>1. Import Patch / Vulnerability CSV</h2>
+<p class="muted">Flexible importer: automatically detects Software Vulnerabilities or Missing Patches exports. It maps the fields available in each source without inventing missing CVSS/CVE data.</p>
+<label>Import Mode</label>
+<select id="importMode"><option value="append" selected>Append to existing analysis</option><option value="replace">Replace existing analysis</option></select>
 <label class="file-label">📥 Choose CSV<input type="file" id="csvFile" accept=".csv,text/csv"></label>
 <div id="importStatus" class="import-status">No CSV imported yet.</div>
 <div class="legend">Priority rule: CVSS severity + known exploit + patch availability + number of affected computers. P1 is the highest operational priority.</div>
@@ -97,11 +99,19 @@ function categoryOf(text){
  return'Application';
 }
 function priorityScore(p){
+ const n=Number(p.affectedCount)||0;
+ if(p.sourceType==='Missing Patches'){
+   const scope=n>=500?35:n>=100?30:n>=25?20:n>=10?10:n>=1?5:0;
+   const failed=(Number(p.failedSystems)||0)>0?15:0;
+   const reboot=/auto|required/i.test(String(p.reboot||''))?10:0;
+   const uninstall=/not supported/i.test(String(p.patchUninstallation||''))?5:0;
+   const approval=/not approved/i.test(String(p.approveStatus||''))?5:0;
+   return Math.min(69,20+scope+failed+reboot+uninstall+approval);
+ }
  const s=p.cvss;
  const sev=s===null?15:(s>=9?40:s>=7?30:s>=4?20:10);
  const exploit=String(p.exploit).toLowerCase()==='available'?30:0;
  const patch=String(p.patchAvailability).toLowerCase()==='available'?10:0;
- const n=Number(p.affectedCount)||0;
  const affected=n>=100?20:n>=25?15:n>=10?10:n>=1?5:0;
  return Math.min(100,sev+exploit+patch+affected);
 }
@@ -187,7 +197,7 @@ function normalize(p){
  const category=p.category||categoryOf([p.product,p.vulnerability,p.patchName].join(' '));
  const score=priorityScore({...p,cvss});
  const priority=priorityName(score);
- return {...p,cvss,severity:severity(cvss),category,priorityScore:score,priority,affectedBand:affectedBand(p.affectedCount),action:p.action||operationAction({...p,cvss,priority}),status:p.status||'New',owner:p.owner||'Sam - System Admin'};
+ return {...p,sourceType:p.sourceType||'Manual',cvss,severity:severity(cvss),category,priorityScore:score,priority,affectedBand:affectedBand(p.affectedCount),action:p.action||operationAction({...p,cvss,priority}),status:p.status||'New',owner:p.owner||'Sam - System Admin'};
 }
 patches=patches.map(normalize);
 
@@ -204,22 +214,66 @@ function parseCSV(text){
  const headers=rows.shift().map(h=>h.trim());
  return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]??''])));
 }
+function detectImportType(rows){
+ const keys=Object.keys(rows[0]||{});
+ if(keys.includes('Missing Systems')&&keys.includes('Patch Description'))return'Missing Patches';
+ if(keys.includes('Affected Systems')&&keys.includes('Vulnerabilities'))return'Software Vulnerabilities';
+ return'Generic Patch CSV';
+}
 function importRows(rows){
+ const sourceType=detectImportType(rows);
  return rows.map((r,i)=>{
+  if(sourceType==='Missing Patches'){
+    const desc=clean(r['Patch Description']);
+    const missing=Number(clean(r['Missing Systems']))||0;
+    return normalize({
+      id:'patch-'+Date.now()+'-'+i,
+      sourceType,
+      vulnerability:desc,
+      product:desc,
+      affectedCount:missing,
+      failedSystems:Number(clean(r['Failed Systems']))||0,
+      exploit:'Unknown',
+      patchAvailability:'Available',
+      cvss:null,
+      publishedDate:'',
+      discoveredDate:'',
+      kb:clean(r['Patch ID']),
+      bulletinId:clean(r['Bulletin ID']),
+      patchName:desc,
+      cve:(desc.match(/CVE-\d{4}-\d+/i)||[''])[0].toUpperCase(),
+      approveStatus:clean(r['Approve Status']),
+      platform:clean(r['Platform']),
+      reboot:clean(r['Reboot']),
+      patchUninstallation:clean(r['Patch Uninstallation']),
+      issues:'',
+      recommendation:'',
+      status:/approved/i.test(clean(r['Approve Status']))&&!/not approved/i.test(clean(r['Approve Status']))?'Approved':'New',
+      owner:'Sam - System Admin'
+    });
+  }
   const cvss=numeric(r['CVSS 3.0 Score']) ?? numeric(r['CVSS 2.0 Score']);
+  const vuln=clean(r['Vulnerabilities']||r['Patch Description']||r['Product']||r['Name']);
   return normalize({
    id:'import-'+Date.now()+'-'+i,
-   vulnerability:clean(r['Vulnerabilities']),
-   product:clean(r['Vulnerabilities']),
-   affectedCount:Number(clean(r['Affected Systems']))||0,
+   sourceType:sourceType==='Generic Patch CSV'?'Generic Patch CSV':'Software Vulnerabilities',
+   vulnerability:vuln,
+   product:vuln,
+   affectedCount:Number(clean(r['Affected Systems']||r['Missing Systems']||r['Affected Computers']))||0,
+   failedSystems:Number(clean(r['Failed Systems']))||0,
    exploit:clean(r['Exploit Status'])||'Unknown',
-   patchAvailability:clean(r['Patch Availability'])||'Not available',
+   patchAvailability:clean(r['Patch Availability'])||'Unknown',
    cvss,
    publishedDate:clean(r['Published Date']),
    discoveredDate:clean(r['Discovered Date']),
-   kb:clean(r['Patch ID']),
-   patchName:clean(r['Patch Name']),
-   cve:(clean(r['Vulnerabilities']).match(/CVE-\d{4}-\d+/i)||[''])[0].toUpperCase(),
+   kb:clean(r['Patch ID']||r['KB']||r['KB ID']),
+   bulletinId:clean(r['Bulletin ID']),
+   patchName:clean(r['Patch Name']||r['Patch Description']),
+   approveStatus:clean(r['Approve Status']),
+   platform:clean(r['Platform']),
+   reboot:clean(r['Reboot']),
+   patchUninstallation:clean(r['Patch Uninstallation']),
+   cve:(vuln.match(/CVE-\d{4}-\d+/i)||[''])[0].toUpperCase(),
    issues:'',
    recommendation:'',
    status:'New',
@@ -236,7 +290,7 @@ function render(){
  const list=filtered();
  $('rows').innerHTML=list.map(p=>`<tr class="click" data-id="${p.id}">
  <td><span class="prio ${p.priority.slice(0,2)}">${esc(p.priority)}</span><div class="small">Score ${p.priorityScore}</div></td>
- <td><b>${esc(p.kb||'No Patch ID')}</b><div class="small">${esc(p.patchName||p.cve||'')}</div></td>
+ <td><b>${esc(p.kb||'No Patch ID')}</b><div class="small">${esc(p.patchName||p.cve||'')}</div><div class="small">Source: ${esc(p.sourceType||'Manual')}</div></td>
  <td>${esc(p.product||p.vulnerability)}</td>
  <td><span class="sev ${esc(p.severity)}">${esc(p.severity)}</span>${p.cvss!==null?'<div class="small">CVSS '+esc(p.cvss)+'</div>':''}</td>
  <td><b>${esc(p.affectedCount)}</b><div class="small">${esc(p.affectedBand)}</div></td>
@@ -289,6 +343,10 @@ function renderFullPatchPage(p){
      <div class="box"><b>Exploit / Patch</b><span>Exploit: ${esc(p.exploit)}\nPatch: ${esc(p.patchAvailability)}</span></div>
      <div class="box"><b>Published / Discovered</b><span>${esc(p.publishedDate||'-')}\n${esc(p.discoveredDate||'-')}</span></div>
      <div class="box"><b>Status / Owner</b><span>${esc(p.status)}\n${esc(p.owner)}</span></div>
+     <div class="box"><b>Patch Source</b><span>${esc(p.sourceType||'Manual')}\nBulletin: ${esc(p.bulletinId||'-')}</span></div>
+     <div class="box"><b>Platform / Reboot</b><span>${esc(p.platform||'-')}\n${esc(p.reboot||'Unknown')}</span></div>
+     <div class="box"><b>Approval / Uninstall</b><span>${esc(p.approveStatus||'-')}\nUninstall: ${esc(p.patchUninstallation||'Unknown')}</span></div>
+     <div class="box"><b>Failed Systems</b><span>${esc(p.failedSystems??0)}</span></div>
      <div class="box"><b>Benchmark</b><span>${esc(b.benchmarkStatus)}\n${b.daysOpen===null?'No discovery date':b.daysOpen+' days open / '+b.targetDays+' day target'+(b.overdueDays?'\n'+b.overdueDays+' days overdue':'')}</span></div>
      <div class="box"><b>Business Impact</b><span>${esc(impacts.businessImpact)}</span></div>
      <div class="box"><b>Technical Impact</b><span>${esc(impacts.technicalImpact)}</span></div>
@@ -302,7 +360,7 @@ function renderFullPatchPage(p){
        <b>Relevant Patch Review Links</b>
        <div class="review-links">${links.length?links.map(l=>'<a target="_blank" rel="noreferrer" href="'+esc(l.url)+'">'+esc(l.label)+' ↗</a>').join(''):'<span class="muted">No KB/CVE identifier was detected in this record. Use the patch name/vendor portal for manual verification.</span>'}</div>
      </div>
-     <div class="box" style="grid-column:1/-1"><b>Source Note</b><span>The vulnerability import contains an affected-system count, not individual hostnames. Import device-level data later to map this patch to exact computers.</span></div>
+     <div class="box" style="grid-column:1/-1"><b>Source Note</b><span>This import contains system counts, not individual hostnames. Import a device-level export later to map this patch to exact computers.</span></div>
    </div>
    <div class="actions"><button onclick="advance('${p.id}');window.location.reload()">Advance Status</button></div>
  </section>`;
@@ -337,7 +395,7 @@ function operationRows(list){
   Category:p.category,Affected_Computers:p.affectedCount,Affected_Band:p.affectedBand,
   Exploit_Status:p.exploit,Patch_Availability:p.patchAvailability,Patch_ID:p.kb||'',
   Patch_Name:p.patchName||'',CVE:p.cve||'',Vulnerability:p.vulnerability||p.product||'',
-  Published_Date:p.publishedDate||'',Discovered_Date:p.discoveredDate||'',
+  Source_Type:p.sourceType||'',Bulletin_ID:p.bulletinId||'',Platform:p.platform||'',Approve_Status:p.approveStatus||'',Reboot:p.reboot||'',Patch_Uninstallation:p.patchUninstallation||'',Failed_Systems:p.failedSystems??'',Published_Date:p.publishedDate||'',Discovered_Date:p.discoveredDate||'',
   Benchmark_Status:benchmarkInfo(p).benchmarkStatus,Benchmark_Target_Days:benchmarkInfo(p).targetDays,Days_Open:benchmarkInfo(p).daysOpen??'',Overdue_Days:benchmarkInfo(p).overdueDays??'',Operation_Action:p.action,Status:p.status,Owner:p.owner
  }));
 }
@@ -365,13 +423,16 @@ $('csvFile').onchange=async e=>{
  const rows=parseCSV(await file.text());
  if(!rows.length){$('importStatus').textContent='Import failed: no rows found.';return}
  const imported=importRows(rows);
- patches=imported;selectedId=patches[0]?.id;save();
- $('importStatus').textContent=`Imported ${patches.length} rows from ${file.name}. Priority and category analysis completed.`;
+ const detected=detectImportType(rows);
+ const mode=$('importMode').value;
+ patches=mode==='replace'?imported:[...imported,...patches];
+ selectedId=imported[0]?.id||patches[0]?.id;save();
+ $('importStatus').textContent=`Detected ${detected}. Imported ${imported.length} rows from ${file.name}. ${mode==='append'?'Added to existing analysis.':'Replaced existing analysis.'}`;
  render();
 };
 $('patchForm').onsubmit=e=>{
  e.preventDefault();
- const p=normalize({id:crypto.randomUUID(),kb:$('kb').value.trim(),cve:$('cve').value.trim(),product:$('product').value.trim(),vulnerability:$('product').value.trim(),
+ const p=normalize({id:crypto.randomUUID(),sourceType:'Manual',kb:$('kb').value.trim(),cve:$('cve').value.trim(),product:$('product').value.trim(),vulnerability:$('product').value.trim(),
  affectedCount:Number($('affectedCount').value)||0,cvss:numeric($('cvss').value),exploit:$('exploit').value,patchAvailability:$('patchAvailability').value,issues:$('issues').value.trim(),
  recommendation:$('recommendation').value.trim(),status:$('status').value,owner:$('owner').value,publishedDate:'',discoveredDate:'',patchName:''});
  patches.unshift(p);selectedId=p.id;save();e.target.reset();render();
