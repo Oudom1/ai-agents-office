@@ -39,7 +39,7 @@ type Task = {
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
 const API = API_BASE + '/api';
 const TYPING_TOOL_URL = 'https://typing-tool-pu0o.onrender.com';
-const PATCH_PORTAL_URL = `${import.meta.env.BASE_URL || '/'}patch-analysis/`;
+const PATCH_PORTAL_URL = `${import.meta.env.BASE_URL || '/'}patch-analysis/?v=20261007-4`;
 const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
 function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
