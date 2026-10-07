@@ -20,6 +20,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 .sev,.prio{display:inline-block;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800;white-space:nowrap}.Critical,.P1{background:#5f1221;color:#ffd6dd}.High,.P2{background:#5a2d14;color:#ffd9bd}.Medium,.P3{background:#594b12;color:#fff0a8}.Low,.P4{background:#174532;color:#bdffd9}.Unknown{background:#263746;color:#cedce6}
 .click{cursor:pointer}.click:hover{background:#10283b}.detail{margin-top:14px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.box{padding:11px;border:1px solid var(--line);border-radius:10px;background:#0a1724}.box b{display:block;font-size:10px;color:#8fb7cc;margin-bottom:5px;text-transform:uppercase}.box span{font-size:12px;white-space:pre-wrap}.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.small{font-size:10px;color:var(--muted)}
 .import-box{border:1px dashed #38617d;border-radius:10px;padding:12px;margin-bottom:14px;background:#0a1724}.import-status{margin-top:8px;font-size:11px;color:#8fffc0}.legend{margin-top:10px;font-size:11px;color:#91a9ba;line-height:1.5}.bench-ok{color:#8fffc0}.bench-due{color:#ffd36a}.bench-over{color:#ff8fa1}.benchmark-box{margin-top:12px;padding:12px;border:1px solid #315878;border-radius:10px;background:#0b1d2c}.benchmark-box h3{margin:0 0 8px;font-size:12px}.benchmark-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.benchmark-grid input{padding:7px}.benchmark-grid label{margin-top:0}
+.review-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.review-links a{display:inline-block;padding:9px 11px;border:1px solid #38718f;border-radius:8px;background:#102536;color:#bfe9ff;text-decoration:none;font-size:11px;font-weight:700}.review-links a:hover{filter:brightness(1.12)}.detail-hero{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}.detail-hero h2{font-size:20px;margin-bottom:4px}.detail-hero .back{white-space:nowrap}.full-detail{max-width:1500px;margin:auto}.full-detail .detail-grid{grid-template-columns:repeat(3,1fr)}
 @media(max-width:1150px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
 </style>
 </head>
@@ -242,11 +243,69 @@ function render(){
  <td>${esc(p.category)}</td><td>${esc(p.exploit)}</td><td>${esc(p.patchAvailability)}</td>
  <td>${(()=>{const b=benchmarkInfo(p);const cls=b.benchmarkStatus==='Overdue'?'bench-over':b.benchmarkStatus==='Due Soon'?'bench-due':'bench-ok';return '<b class="'+cls+'">'+esc(b.benchmarkStatus)+'</b><div class="small">'+(b.daysOpen===null?'No date':b.daysOpen+'d open / '+b.targetDays+'d target'+(b.overdueDays?'<br>'+b.overdueDays+'d overdue':''))+'</div>'})()}</td>
  <td>${esc(p.action)}</td><td>${esc(p.status)}</td><td>${esc(p.owner)}</td></tr>`).join('')||'<tr><td colspan="11">No matching vulnerability records.</td></tr>';
- document.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{selectedId=r.dataset.id;renderDetail()});
+ document.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>{window.location.href=window.location.pathname+'?patch='+encodeURIComponent(r.dataset.id)});
  const p1=patches.filter(p=>p.priority.startsWith('P1')).length,p2=patches.filter(p=>p.priority.startsWith('P2')).length;
  const devices=patches.reduce((s,p)=>s+(Number(p.affectedCount)||0),0),sql=patches.filter(p=>p.category==='SQL / Database').length,apps=patches.filter(p=>p.category==='Application').length,overdue=patches.filter(p=>benchmarkInfo(p).benchmarkStatus==='Overdue').length;
  $('metrics').innerHTML=[['Imported',patches.length],['P1 Critical',p1],['P2 High',p2],['Overdue',overdue],['SQL / DB',sql],['Applications',apps]].map(([a,b])=>`<div class="metric"><b>${b}</b><span>${a}</span></div>`).join('');
  renderDetail();
+}
+function extractReviewIds(p){
+ const text=[p.kb,p.cve,p.patchName,p.vulnerability,p.product].join(' ');
+ const cves=[...new Set((text.match(/CVE-\d{4}-\d+/gi)||[]).map(x=>x.toUpperCase()))];
+ const kbs=[...new Set((text.match(/KB\d{6,8}/gi)||[]).map(x=>x.toUpperCase()))];
+ return{cves,kbs};
+}
+function reviewLinks(p){
+ const ids=extractReviewIds(p), links=[];
+ ids.kbs.forEach(kb=>{
+   links.push({label:'Microsoft Update Catalog • '+kb,url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(kb)});
+   links.push({label:'Microsoft Support Search • '+kb,url:'https://support.microsoft.com/search/results?query='+encodeURIComponent(kb)});
+ });
+ ids.cves.forEach(cve=>{
+   links.push({label:'Microsoft MSRC • '+cve,url:'https://msrc.microsoft.com/update-guide/vulnerability/'+encodeURIComponent(cve)});
+   links.push({label:'NVD • '+cve,url:'https://nvd.nist.gov/vuln/detail/'+encodeURIComponent(cve)});
+   links.push({label:'CVE.org • '+cve,url:'https://www.cve.org/CVERecord?id='+encodeURIComponent(cve)});
+ });
+ if(!ids.kbs.length && p.patchName){
+   links.push({label:'Search Microsoft Update Catalog',url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(p.patchName)});
+ }
+ return links;
+}
+function renderFullPatchPage(p){
+ const b=benchmarkInfo(p), impacts=impactAnalysis(p), links=reviewLinks(p);
+ document.querySelector('main').innerHTML=`
+ <section class="panel full-detail">
+   <div class="detail-hero">
+     <div>
+       <h2>${esc(p.kb||p.cve||'Patch')} • Patch Review</h2>
+       <p class="muted">${esc(p.vulnerability||p.product||'')}</p>
+     </div>
+     <button class="secondary back" onclick="window.location.href=window.location.pathname">← Back to Patch List</button>
+   </div>
+   <div class="detail-grid">
+     <div class="box"><b>Priority</b><span>${esc(p.priority)} (Score ${p.priorityScore})\n${esc(p.severity)} ${p.cvss!==null?'CVSS '+p.cvss:''}</span></div>
+     <div class="box"><b>Affected Computers</b><span>${esc(p.affectedCount)}\n${esc(p.affectedBand)}</span></div>
+     <div class="box"><b>Category</b><span>${esc(p.category)}</span></div>
+     <div class="box"><b>Exploit / Patch</b><span>Exploit: ${esc(p.exploit)}\nPatch: ${esc(p.patchAvailability)}</span></div>
+     <div class="box"><b>Published / Discovered</b><span>${esc(p.publishedDate||'-')}\n${esc(p.discoveredDate||'-')}</span></div>
+     <div class="box"><b>Status / Owner</b><span>${esc(p.status)}\n${esc(p.owner)}</span></div>
+     <div class="box"><b>Benchmark</b><span>${esc(b.benchmarkStatus)}\n${b.daysOpen===null?'No discovery date':b.daysOpen+' days open / '+b.targetDays+' day target'+(b.overdueDays?'\n'+b.overdueDays+' days overdue':'')}</span></div>
+     <div class="box"><b>Business Impact</b><span>${esc(impacts.businessImpact)}</span></div>
+     <div class="box"><b>Technical Impact</b><span>${esc(impacts.technicalImpact)}</span></div>
+     <div class="box"><b>Patch Disadvantages / Risks</b><span>${esc(impacts.patchRisks)}</span></div>
+     <div class="box"><b>Risk of Delaying</b><span>${esc(impacts.delayRisks)}</span></div>
+     <div class="box"><b>Compatibility Concerns</b><span>${esc(impacts.compatibility)}</span></div>
+     <div class="box"><b>Downtime / Reboot</b><span>${esc(impacts.downtime)}</span></div>
+     <div class="box" style="grid-column:1/-1"><b>Recommended Operation</b><span>${esc(p.action)}</span></div>
+     <div class="box" style="grid-column:1/-1"><b>Rollback / Validation Guidance</b><span>${esc(impacts.rollback)}</span></div>
+     <div class="box" style="grid-column:1/-1">
+       <b>Relevant Patch Review Links</b>
+       <div class="review-links">${links.length?links.map(l=>'<a target="_blank" rel="noreferrer" href="'+esc(l.url)+'">'+esc(l.label)+' ↗</a>').join(''):'<span class="muted">No KB/CVE identifier was detected in this record. Use the patch name/vendor portal for manual verification.</span>'}</div>
+     </div>
+     <div class="box" style="grid-column:1/-1"><b>Source Note</b><span>The vulnerability import contains an affected-system count, not individual hostnames. Import device-level data later to map this patch to exact computers.</span></div>
+   </div>
+   <div class="actions"><button onclick="advance('${p.id}');window.location.reload()">Advance Status</button></div>
+ </section>`;
 }
 function renderDetail(){
  const p=patches.find(x=>x.id===selectedId);if(!p){$('detail').style.display='none';return}$('detail').style.display='block';
@@ -321,7 +380,11 @@ $('patchForm').onsubmit=e=>{
 $('clearBtn').onclick=()=>{if(confirm('Clear all imported and manual patch data?')){patches=[];selectedId=null;save();render();$('importStatus').textContent='All data cleared.'}};
 $('exportCsvBtn').onclick=()=>downloadCSV(filtered(),'Patch_Operation_Priority.csv');
 $('exportExcelBtn').onclick=exportExcel;
-render();
+const requestedPatch=new URLSearchParams(window.location.search).get('patch');
+if(requestedPatch){
+  const requested=patches.find(p=>p.id===requestedPatch);
+  if(requested) renderFullPatchPage(requested); else render();
+}else render();
 </script>
 </body>
 </html>
