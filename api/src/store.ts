@@ -113,6 +113,56 @@ const linaTasks = mkTasks('lina-marketplace','qa','QA Workspace',linaTitles,1000
 const minaTasks = mkTasks('mina-marketplace','security','Security Review Workspace',minaTitles,150000,2700);
 const noahTasks = mkTasks('noah-marketplace','cloud','Cloud / CI-CD Workspace',noahTitles,200000,2700);
 
-export const tasks:any[] = [...alexTasks, ...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks];
+
+const patchPortalTitles: Record<string,string[]> = {
+  manager: [
+    'Patch Intelligence Portal: coordinate scope, priorities, owners and release gates',
+    'Define patch review workflow from intake to analysis, QA, security approval, deployment and closure',
+    'Review high/critical CVE patch blockers and make final rollout decision'
+  ],
+  developer: [
+    'Build Patch & CVE Analysis Portal webpage with responsive dashboard and patch-post form',
+    'Add KB/CVE/CVSS/product/exploit/reboot/known-issue/risk/recommendation fields',
+    'Add search, severity/status filters, local persistence, sample records and per-patch detail analysis'
+  ],
+  sysadmin: [
+    'Define Windows, Microsoft 365, browser, server and application patch assessment fields',
+    'Define applicability, prerequisites, supersedence, reboot, rollback and deployment-ring guidance',
+    'Review patch operational impact and propose pilot/production rollout plan'
+  ],
+  security: [
+    'Define CVE severity, exploit status, exposure and compensating-control security analysis',
+    'Review vulnerability prioritization logic using CVSS, exploitability and affected asset criticality',
+    'Security-review each critical patch recommendation before production rollout'
+  ],
+  qa: [
+    'Test Patch & CVE Analysis Portal form validation, filters, persistence and responsive UI',
+    'Validate patch records keep correct KB/CVE mappings and status transitions',
+    'Run regression and browser testing before release'
+  ],
+  cloud: [
+    'Prepare CI/CD and hosting for Patch & CVE Analysis Portal on the existing AI Agents Office site',
+    'Verify GitHub Pages build publishes /patch-analysis/ and API deployment remains healthy',
+    'Add uptime/release verification for the patch portal after deployment'
+  ],
+  implement: [
+    'Verify patch-analysis workflow from new post through review, rollout recommendation and closure',
+    'Validate deployment-ring sequence: pilot, phased rollout, monitoring and rollback',
+    'Prepare implementation checklist for approved patches'
+  ]
+};
+
+const patchTasks = Object.entries(patchPortalTitles).flatMap(([agentId,titles], groupIndex) =>
+  mkTasks('patch-portal-' + agentId, agentId,
+    agentId === 'developer' ? 'Developer Workspace' :
+    agentId === 'security' ? 'Security Review Workspace' :
+    agentId === 'qa' ? 'QA Workspace' :
+    agentId === 'cloud' ? 'Cloud / CI-CD Workspace' :
+    agentId === 'sysadmin' ? 'Patch Operations Workspace' :
+    agentId === 'implement' ? 'Implementation Workspace' : 'Management Workspace',
+    titles, 300000 + groupIndex * 50000, agentId === 'developer' ? 3600 : 2400)
+);
+
+export const tasks:any[] = [...alexTasks, ...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks, ...patchTasks];
 
 export const startedAt = new Date().toISOString();
