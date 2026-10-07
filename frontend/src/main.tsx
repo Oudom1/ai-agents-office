@@ -39,6 +39,7 @@ type Task = {
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
 const API = API_BASE + '/api';
 const TYPING_TOOL_URL = 'https://typing-tool-pu0o.onrender.com';
+const PATCH_PORTAL_URL = `${import.meta.env.BASE_URL || '/'}patch-analysis/`;
 const AUTH_TOKEN_KEY = 'ai-office-auth-token-v1';
 function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
@@ -508,6 +509,7 @@ function App() {
             <div className="task-compose"><input placeholder={selectedPlaceholder} value={taskTitle} onChange={e => setTaskTitle(e.target.value.slice(0, 240))} onKeyDown={e => { if (e.key === 'Enter') assign(); }} /><span>{taskTitle.length}/240</span></div>
             <button className="assign-btn" disabled={!taskTitle.trim()} onClick={() => assign()}>{selectedButton}</button>
             <button className="secondary" disabled={!taskTitle.trim()} onClick={alexAutoAssign}>Alex Auto-Assign by Skill</button>
+            <a href={PATCH_PORTAL_URL} target="_blank" rel="noreferrer" style={{display:'block',marginTop:'10px',padding:'10px 12px',textAlign:'center',border:'1px solid #315878',borderRadius:'8px',background:'#102536',color:'#bfe9ff',textDecoration:'none',fontWeight:700}}>🛡 Open Patch & CVE Analysis Portal ↗</a>
           </div>
 
           {selected === 'implement' && <div className="panel kai-panel"><div className="kai-title"><h2>Kai Video Studio</h2><span>FREE-ONLY</span></div><div style={{margin:'10px 0',padding:'10px 12px',borderRadius:'8px',border:`1px solid ${kaiProblem ? '#ff4772' : '#2b506b'}`,background:kaiProblem ? '#35121dcc' : '#102536cc',color:kaiProblem ? '#ffd8e1' : '#bfe9ff',fontSize:'12px',lineHeight:1.45}}><b>{kaiProblem ? '⚠ KAI ERROR' : 'KAI LIVE STATUS'}</b><div style={{marginTop:'5px'}}>{kaiProblem || kaiStatusText}</div></div><p className="kai-note">Real provider route: Hugging Face ZeroGPU LTX Video Fast. Longer requests are split into short scenes, merged into one MP4, then uploaded to Google Drive when Drive OAuth is configured. FREE ONLY; no paid fallback. Kai completes only after the final MP4 exists.</p><div className="skill-tags"><span>PixVerse Free</span><span>Hugging Face ZeroGPU</span><span>Runway Free/Trial</span><span>Google Drive</span><span>No Paid Fallback</span></div><label>Quick video templates</label><div className="template-grid">{kaiVideoTemplates.map(t => <button key={t.name} className="template-btn" onClick={() => launchKaiQuickTemplate(t.name, t.prompt)}>{t.name}</button>)}</div></div>}
