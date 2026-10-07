@@ -25,7 +25,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 </style>
 </head>
 <body>
-<header><div><h1>🛡 Patch & CVE Analysis Portal</h1><p>Import vulnerability scan → prioritize affected computers → separate SQL/application work → export operations files</p></div><div class="status">● AI Agents Office Security Workspace</div></header>
+<header><div><h1>🛡 Patch & CVE Analysis Portal</h1><p>Import vulnerability scan → prioritize affected computers → separate SQL/application work → export operations files</p></div><div class="status">● AI Agents Office Security Workspace • Build 2026.10.07.4</div></header>
 <main>
 <div class="grid">
 <section class="panel">
@@ -33,7 +33,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <h2>1. Import Patch / Vulnerability CSV</h2>
 <p class="muted">Flexible importer: automatically detects Software Vulnerabilities or Missing Patches exports. It maps the fields available in each source without inventing missing CVSS/CVE data.</p>
 <label>Import Mode</label>
-<select id="importMode"><option value="append" selected>Append to existing analysis</option><option value="replace">Replace existing analysis</option></select>
+<select id="importMode"><option value="replace" selected>Replace existing analysis</option><option value="append">Append to existing analysis</option></select>
 <label class="file-label">📥 Choose CSV<input type="file" id="csvFile" accept=".csv,text/csv"></label>
 <div id="importStatus" class="import-status">No CSV imported yet.</div>
 <div class="legend">Priority rule: CVSS severity + known exploit + patch availability + number of affected computers. P1 is the highest operational priority.</div>
@@ -82,7 +82,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 </main>
 
 <script>
-const KEY='ai-office-patch-analysis-v3';
+const KEY='ai-office-patch-analysis-v4';
 let patches=JSON.parse(localStorage.getItem(KEY)||'[]');
 let selectedId=patches[0]?.id;
 const $=id=>document.getElementById(id);
