@@ -425,6 +425,7 @@ function exportExcel(){
  if(!window.XLSX)return alert('Excel library could not load.');
  const post=sapExportRows('Post');
  const park=sapExportRows('Park');
+ if(!park.length){alert('No Parking data was detected in the imported workbook. Your current source does not contain a parking T-code such as FV50. The workbook will still export the two required sheets, but the Parking sheet will remain empty until Parking source data is imported.');}
  const wb=XLSX.utils.book_new();
 
  const postWs=buildSapSheet(post,'Staff Authorised for Entry Posting');
@@ -438,7 +439,7 @@ function exportExcel(){
 $('sapFile').onchange=async e=>{
  const file=e.target.files?.[0];if(!file)return;
  try{const result=await importFile(file);const recs=result.records;if(!recs.length){$('importStatus').textContent='Import failed: no user records detected across the workbook sheets.';return}
- aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;$('importStatus').textContent=`Read ${result.sheetCount} sheet(s), ${result.roleMappings} role mapping(s), ${result.assignments} user-role assignment(s). Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.`;render();
+ aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;const parkCount=users.reduce((n,u)=>n+(u.parkTcodes||[]).length,0);const postCount=users.reduce((n,u)=>n+(u.postTcodes||[]).length,0);const parkNote=parkCount===0?' ⚠ No Parking transaction was detected in this workbook (for example FV50), so the Parking export will be empty until parking source data is included.':'';$('importStatus').textContent=`Read ${result.sheetCount} sheet(s), ${result.roleMappings} role mapping(s), ${result.assignments} user-role assignment(s). Detected ${postCount} posting access record(s) and ${parkCount} parking access record(s). Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.${parkNote}`;render();
  }catch(err){$('importStatus').textContent='Import failed: '+err.message}
 };
 $('sapForm').onsubmit=e=>{
