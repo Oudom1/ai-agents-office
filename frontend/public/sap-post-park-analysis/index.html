@@ -30,12 +30,12 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <section class="panel">
 <div class="import-box">
 <h2>1. Import SAP Post / Park File</h2>
-<p class="muted">Flexible importer: supports your two-sheet SAP workbook with separate posting and parking sheets, or a normalized CSV/XLSX containing User, Access Type and T-Code.</p>
+<p class="muted">Flexible multi-sheet importer: reads every worksheet, detects the real header row, joins Role → T-code → User relationships, and also supports your previous posting/parking workbook format.</p>
 <label>Import Mode</label>
 <select id="importMode"><option value="replace" selected>Replace existing analysis</option><option value="append">Append to existing analysis</option></select>
 <label class="file-label">📥 Choose Excel / CSV<input type="file" id="sapFile" accept=".xlsx,.xls,.csv,text/csv"></label>
 <div id="importStatus" class="import-status">No SAP file imported yet.</div>
-<div class="legend">Risk rule: a user with both Post and Park access is flagged as a potential Segregation of Duties (SoD) conflict. Locked or expired accounts are shown separately for review.</div>
+<div class="legend">Risk rule: a user with both Post and Park access is flagged as a potential Segregation of Duties (SoD) conflict. The importer also reads Locked and Reason for User Lock from any detected user-detail sheet.</div>
 <div class="summary-box">
 <h3>Analysis Rules</h3>
 <div class="summary-grid">
@@ -70,7 +70,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 </div>
 
 <div class="table-wrap"><table><thead>
-<tr><th>Risk</th><th>User ID</th><th>Full Name</th><th>Access</th><th>Posting T-Codes</th><th>Parking T-Codes</th><th>Account State</th><th>Validity</th><th>User Type</th><th>Finding</th><th>Review Status</th><th>Owner</th></tr>
+<tr><th>Risk</th><th>User ID</th><th>Full Name</th><th>Access</th><th>Posting T-Codes</th><th>Parking T-Codes</th><th>Account State</th><th>Reason for User Lock</th><th>Validity</th><th>User Type</th><th>Finding</th><th>Review Status</th><th>Owner</th></tr>
 <tr class="filter-row">
 <th><select id="fRisk"><option value="">All</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select></th>
 <th><input id="fUser" placeholder="User..."></th>
@@ -79,6 +79,7 @@ button,.file-label{border:1px solid #38718f;background:#12384d;color:#eaf7ff;bor
 <th><input id="fPost" placeholder="T-code..."></th>
 <th><input id="fPark" placeholder="T-code..."></th>
 <th><select id="fState"><option value="">All</option><option>Active</option><option>Locked</option><option>Expired</option></select></th>
+<th><input id="fLockReason" placeholder="Lock reason..."></th>
 <th><input id="fValidity" placeholder="Valid to..."></th>
 <th><input id="fType" placeholder="Type..."></th>
 <th><input id="fFinding" placeholder="Finding..."></th>
@@ -105,6 +106,7 @@ function findVal(row,names){
  for(const n of names){const nn=normKey(n);const hit=entries.find(([k])=>normKey(k)===nn||normKey(k).includes(nn));if(hit)return clean(hit[1]);}
  return '';
 }
+
 function dateValue(v){
  if(!v)return'';
  if(typeof v==='number'&&window.XLSX){const d=XLSX.SSF.parse_date_code(v);if(d)return [d.y,String(d.m).padStart(2,'0'),String(d.d).padStart(2,'0')].join('-')}
@@ -114,43 +116,86 @@ function isLocked(v){
  const s=clean(v).toLowerCase();
  return s==='x'||s==='yes'||s==='true'||s==='locked'||s==='1'||s.includes('lock');
 }
-function tcodeFrom(row){
- return findVal(row,['T-code','Tcode','Transaction Code','Transaction','T Code','T-Code(s)','Role/T-Code','Role']);
-}
+function reasonFrom(row){return findVal(row,['Reason for User Lock','Reason User Lock','Lock Reason','Reason for Lock','User Lock Reason'])}
+function tcodeFrom(row){return findVal(row,['T-code','Tcode','Transaction Code','Transaction','T Code','T-Code(s)','Extended name','Extended Name','Role/T-Code'])}
+function roleFrom(row){return findVal(row,['Role','Role Name','SAP Role','Composite Role'])}
 function usernameFrom(row){return findVal(row,['User name','Username','User ID','User','SAP User','SAP Username','Account'])}
 function fullnameFrom(row){return findVal(row,['Full Name','Name','User Full Name','Display Name'])}
 function userTypeFrom(row){return findVal(row,['User Type','Type','User type'])}
-function validFromFrom(row){return dateValue(findVal(row,['Valid From','Validity From','From Date']))}
-function validToFrom(row){return dateValue(findVal(row,['Valid To','Validity To','To Date','Valid until']))}
-function lockFrom(row){return findVal(row,['Lock status','Locked','User Lock','Lock','Status'])}
+function validFromFrom(row){return dateValue(findVal(row,['Valid From','Validity From','From Date','Start date','Start Date']))}
+function validToFrom(row){return dateValue(findVal(row,['Valid To','Validity To','To Date','Valid until','End date','End Date']))}
+function lockFrom(row){return findVal(row,['Locked','Lock status','User Lock','Lock','Account Lock'])}
 function departmentFrom(row){return findVal(row,['Department','Org Unit','Business Unit','Remark','Description'])}
-function accessFrom(row, sheetName=''){
- let v=findVal(row,['Access Type','Access','Permission','Action']).toLowerCase();
- const sh=sheetName.toLowerCase();
- if(v.includes('park')||sh.includes('park'))return'Park';
- if(v.includes('post')||sh.includes('post'))return'Post';
+
+function classifyAccess(tcode='',sheetName='',typeText=''){
+ const tc=clean(tcode).toUpperCase();
+ const hint=(sheetName+' '+typeText).toLowerCase();
+ if(hint.includes('parking')||hint.includes(' park ')||hint.startsWith('park')||/\bpark\b/.test(hint))return'Park';
+ if(hint.includes('posting')||hint.includes(' post ')||hint.startsWith('post')||/\bpost\b/.test(hint))return'Post';
+ if(/^FV/.test(tc))return'Park';
+ const postingCodes=['F-02','F-04','FB01','FB05','FB11','FB50','FBR2','ZFTM_E01','ZFTM_E03'];
+ if(postingCodes.includes(tc))return'Post';
  return'';
+}
+function accessFrom(row,sheetName=''){
+ const explicit=findVal(row,['Access Type','Access','Permission','Action']);
+ const typeText=findVal(row,['Type','Description','Transaction Description']);
+ return classifyAccess(tcodeFrom(row),sheetName,explicit+' '+typeText);
 }
 function parseCsv(text){
  const rows=[];let row=[],cell='',q=false;
  for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];if(c==='"'&&q&&n==='"'){cell+='"';i++;}else if(c==='"'){q=!q;}else if(c===','&&!q){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&n==='\n')i++;row.push(cell);cell='';if(row.some(x=>clean(x)!==''))rows.push(row);row=[];}else cell+=c}
  if(cell||row.length){row.push(cell);rows.push(row)}
- const h=(rows.shift()||[]).map(clean);return rows.map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]??''])));
+ return rows;
 }
-function rawRecord(row,access,sheetName){
- const username=usernameFrom(row); if(!username)return null;
- return{username,fullName:fullnameFrom(row),access:access||accessFrom(row,sheetName),tcode:tcodeFrom(row),lockRaw:lockFrom(row),validFrom:validFromFrom(row),validTo:validToFrom(row),userType:userTypeFrom(row),department:departmentFrom(row),sourceSheet:sheetName};
+function detectHeaderIndex(matrix){
+ const aliases=['username','userid','user name','role','tcode','t-code','extended name','full name','reason for user lock','reporttyp','start date','end date'];
+ let best=0,bestScore=-1;
+ for(let i=0;i<Math.min(matrix.length,25);i++){
+   const vals=(matrix[i]||[]).map(v=>clean(v).toLowerCase());
+   const score=vals.reduce((sum,v)=>sum+aliases.some(a=>v===a||v.includes(a))?1:0,0);
+   if(score>bestScore){best=i;bestScore=score}
+ }
+ return best;
 }
-function aggregate(records, append=false){
- const existing=append?users.map(u=>({...u,postTcodes:[...(u.postTcodes||[])],parkTcodes:[...(u.parkTcodes||[])],sourceRows:[...(u.sourceRows||[])]})):[];
+function matrixToObjects(matrix){
+ if(!matrix.length)return[];
+ const hi=detectHeaderIndex(matrix),header=(matrix[hi]||[]).map((v,i)=>clean(v)||('Column '+(i+1)));
+ return matrix.slice(hi+1).filter(r=>r.some(v=>clean(v)!=='')).map(r=>Object.fromEntries(header.map((h,i)=>[h,r[i]??''])));
+}
+function rawRecord(row,access,sheetName,profile={}){
+ const username=usernameFrom(row)||profile.username||''; if(!username)return null;
+ const tcode=tcodeFrom(row);
+ const typeText=findVal(row,['Type','Description','Transaction Description']);
+ return{
+   username,
+   fullName:fullnameFrom(row)||profile.fullName||'',
+   access:access||accessFrom(row,sheetName)||classifyAccess(tcode,sheetName,typeText),
+   tcode,
+   role:roleFrom(row),
+   lockRaw:lockFrom(row)||profile.lockRaw||'',
+   lockReason:reasonFrom(row)||profile.lockReason||'',
+   validFrom:validFromFrom(row)||profile.validFrom||'',
+   validTo:validToFrom(row)||profile.validTo||'',
+   userType:userTypeFrom(row)||profile.userType||'',
+   department:departmentFrom(row)||profile.department||'',
+   sourceSheet:sheetName
+ };
+}
+function aggregate(records,append=false){
+ const existing=append?users.map(u=>({...u,postTcodes:[...(u.postTcodes||[])],parkTcodes:[...(u.parkTcodes||[])],otherTcodes:[...(u.otherTcodes||[])],roles:[...(u.roles||[])],sourceRows:[...(u.sourceRows||[])]})):[];
  const map=new Map(existing.map(u=>[u.username.toLowerCase(),u]));
  for(const r of records){
   if(!r||!r.username)continue;const k=r.username.toLowerCase();
   let u=map.get(k);
-  if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],lockRaw:r.lockRaw||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
-  if(!u.fullName&&r.fullName)u.fullName=r.fullName;if(!u.department&&r.department)u.department=r.department;if(!u.userType&&r.userType)u.userType=r.userType;if(!u.lockRaw&&r.lockRaw)u.lockRaw=r.lockRaw;if(!u.validFrom&&r.validFrom)u.validFrom=r.validFrom;if(!u.validTo&&r.validTo)u.validTo=r.validTo;
+  if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],otherTcodes:[],roles:[],lockRaw:r.lockRaw||'',lockReason:r.lockReason||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
+  if(!u.fullName&&r.fullName)u.fullName=r.fullName;if(!u.department&&r.department)u.department=r.department;if(!u.userType&&r.userType)u.userType=r.userType;
+  if(r.lockRaw)u.lockRaw=r.lockRaw;if(r.lockReason)u.lockReason=r.lockReason;
+  if(!u.validFrom&&r.validFrom)u.validFrom=r.validFrom;if(r.validTo)u.validTo=r.validTo;
+  if(r.role&&!u.roles.includes(r.role))u.roles.push(r.role);
   if(r.access==='Post'&&r.tcode&&!u.postTcodes.includes(r.tcode))u.postTcodes.push(r.tcode);
-  if(r.access==='Park'&&r.tcode&&!u.parkTcodes.includes(r.tcode))u.parkTcodes.push(r.tcode);
+  else if(r.access==='Park'&&r.tcode&&!u.parkTcodes.includes(r.tcode))u.parkTcodes.push(r.tcode);
+  else if(r.tcode&&r.tcode!=='#N/A'&&!u.otherTcodes.includes(r.tcode))u.otherTcodes.push(r.tcode);
   if(r.access==='Post'&&!r.tcode&&!u.postTcodes.includes('(access detected)'))u.postTcodes.push('(access detected)');
   if(r.access==='Park'&&!r.tcode&&!u.parkTcodes.includes('(access detected)'))u.parkTcodes.push('(access detected)');
   u.sourceRows.push(r);
@@ -158,15 +203,15 @@ function aggregate(records, append=false){
  users=[...map.values()].map(analyzeUser);
 }
 function accountState(u){
- if(isLocked(u.lockRaw))return'Locked';
- if(u.validTo){const d=new Date(u.validTo);if(Number.isFinite(d.getTime())&&d<new Date(new Date().toDateString()))return'Expired'}
+ if(isLocked(u.lockRaw)||clean(u.lockReason))return'Locked';
+ if(u.validTo&&u.validTo!=='9999-12-31'){const d=new Date(u.validTo);if(Number.isFinite(d.getTime())&&d<new Date(new Date().toDateString()))return'Expired'}
  return'Active';
 }
 function analyzeUser(u){
  const hasPost=(u.postTcodes||[]).length>0,hasPark=(u.parkTcodes||[]).length>0,state=accountState(u);
  let access=hasPost&&hasPark?'BOTH':hasPost?'POST':hasPark?'PARK':'NONE';
- let risk='INFO',finding='No Post/Park access detected.',recommendation='Confirm whether this account is in scope for the SAP Post/Park review.';
- if(state!=='Active'){risk='INFO';finding='Account is '+state.toLowerCase()+'. Access should be validated before retaining it.';recommendation='Verify account lifecycle status and remove unnecessary SAP roles/access if no longer required.'}
+ let risk='INFO',finding='No classified Post/Park access detected.',recommendation='Review unclassified roles/T-codes and confirm whether this account is in scope.';
+ if(state!=='Active'){risk='INFO';finding='Account is '+state.toLowerCase()+(u.lockReason?' — '+u.lockReason:'')+'. Access should be validated before retaining it.';recommendation='Verify account lifecycle status and remove unnecessary SAP roles/access if no longer required.'}
  else if(access==='BOTH'){risk='HIGH';finding='Potential SoD conflict: the same SAP user has both Posting and Parking access.';recommendation='Validate business need. Separate park and post duties where possible, or document approved compensating controls and periodic review.'}
  else if(access==='POST'){risk='MEDIUM';finding='User has Posting access.';recommendation='Confirm posting privilege is required for the role, company code and business process. Apply least privilege.'}
  else if(access==='PARK'){risk='LOW';finding='User has Parking access only.';recommendation='Confirm parking privilege remains required and is limited to the appropriate business scope.'}
@@ -174,23 +219,63 @@ function analyzeUser(u){
 }
 async function importFile(file){
  const ext=file.name.toLowerCase();
- let records=[];
+ const sheets=[];
  if(ext.endsWith('.csv')){
-  const rows=parseCsv(await file.text());records=rows.map(r=>rawRecord(r,accessFrom(r,''),'CSV')).filter(Boolean);
+   sheets.push({name:'CSV',matrix:parseCsv(await file.text())});
  }else{
-  if(!window.XLSX)throw new Error('Excel library could not load');
-  const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:false});
-  for(const sheetName of wb.SheetNames){
-   const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:'',raw:true});
-   for(const row of rows){const rec=rawRecord(row,accessFrom(row,sheetName),sheetName);if(rec)records.push(rec)}
-  }
+   if(!window.XLSX)throw new Error('Excel library could not load');
+   const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:false});
+   for(const sheetName of wb.SheetNames){
+     const matrix=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true});
+     sheets.push({name:sheetName,matrix});
+   }
  }
- return records;
+ const parsed=sheets.map(sh=>({name:sh.name,rows:matrixToObjects(sh.matrix)}));
+ const roleTcodes=new Map(),profiles=new Map(),assignments=[],direct=[];
+ const addRoleTcode=(role,tc)=>{if(!role||!tc||tc==='#N/A')return;const k=role.toUpperCase();if(!roleTcodes.has(k))roleTcodes.set(k,new Set());roleTcodes.get(k).add(tc)};
+ for(const sh of parsed){
+   for(const row of sh.rows){
+     const user=usernameFrom(row),role=roleFrom(row),tc=tcodeFrom(row),reason=reasonFrom(row);
+     if(role&&tc)addRoleTcode(role,tc);
+     if(user){
+       const key=user.toLowerCase();
+       const p=profiles.get(key)||{username:user,fullName:'',lockRaw:'',lockReason:'',validFrom:'',validTo:'',userType:'',department:''};
+       if(fullnameFrom(row))p.fullName=fullnameFrom(row);if(lockFrom(row))p.lockRaw=lockFrom(row);if(reason)p.lockReason=reason;
+       if(validFromFrom(row))p.validFrom=validFromFrom(row);if(validToFrom(row))p.validTo=validToFrom(row);if(userTypeFrom(row))p.userType=userTypeFrom(row);if(departmentFrom(row))p.department=departmentFrom(row);
+       profiles.set(key,p);
+       if(role)assignments.push({username:user,role,validFrom:validFromFrom(row),validTo:validToFrom(row),sheetName:sh.name,row});
+       const a=accessFrom(row,sh.name);
+       if(tc||a)direct.push(rawRecord(row,a,sh.name,p));
+     }
+   }
+ }
+ const joined=[];
+ for(const a of assignments){
+   const profile=profiles.get(a.username.toLowerCase())||{};
+   const tcs=roleTcodes.get(a.role.toUpperCase());
+   if(tcs&&tcs.size){
+     for(const tc of tcs){
+       joined.push({
+         username:a.username,fullName:profile.fullName||'',access:classifyAccess(tc,a.sheetName,''),
+         tcode:tc,role:a.role,lockRaw:profile.lockRaw||'',lockReason:profile.lockReason||'',
+         validFrom:a.validFrom||profile.validFrom||'',validTo:a.validTo||profile.validTo||'',
+         userType:profile.userType||'',department:profile.department||'',sourceSheet:a.sheetName+' + role mapping'
+       });
+     }
+   }
+ }
+ // Add profile-only users so lock reasons are never lost, even if no role/t-code mapping is found.
+ for(const p of profiles.values()){
+   if(!direct.some(r=>r.username.toLowerCase()===p.username.toLowerCase())&&!joined.some(r=>r.username.toLowerCase()===p.username.toLowerCase())){
+     joined.push({...p,access:'',tcode:'',role:'',sourceSheet:'User profile'});
+   }
+ }
+ return {records:[...direct,...joined].filter(Boolean),sheetCount:parsed.length,roleMappings:roleTcodes.size,assignments:assignments.length};
 }
 function filtered(){
  const q=$('search').value.toLowerCase(),rf=$('riskFilter').value,af=$('accessFilter').value,sf=$('stateFilter').value;
- const fr=$('fRisk').value,fu=$('fUser').value.toLowerCase(),fn=$('fName').value.toLowerCase(),fa=$('fAccess').value,fp=$('fPost').value.toLowerCase(),fk=$('fPark').value.toLowerCase(),fs=$('fState').value,fv=$('fValidity').value.toLowerCase(),ft=$('fType').value.toLowerCase(),ff=$('fFinding').value.toLowerCase(),frv=$('fReview').value,fo=$('fOwner').value.toLowerCase();
- return users.filter(u=>(!q||[u.username,u.fullName,u.department,...u.postTcodes,...u.parkTcodes].join(' ').toLowerCase().includes(q))&&(!rf||u.risk===rf)&&(!af||u.access===af)&&(!sf||u.accountState===sf)&&(!fr||u.risk===fr)&&(!fu||u.username.toLowerCase().includes(fu))&&(!fn||u.fullName.toLowerCase().includes(fn))&&(!fa||u.access===fa)&&(!fp||u.postTcodes.join(' ').toLowerCase().includes(fp))&&(!fk||u.parkTcodes.join(' ').toLowerCase().includes(fk))&&(!fs||u.accountState===fs)&&(!fv||String(u.validTo||'').toLowerCase().includes(fv))&&(!ft||u.userType.toLowerCase().includes(ft))&&(!ff||u.finding.toLowerCase().includes(ff))&&(!frv||u.reviewStatus===frv)&&(!fo||u.owner.toLowerCase().includes(fo))).sort((a,b)=>({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[b.risk]-({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[a.risk]))||a.username.localeCompare(b.username));
+ const fr=$('fRisk').value,fu=$('fUser').value.toLowerCase(),fn=$('fName').value.toLowerCase(),fa=$('fAccess').value,fp=$('fPost').value.toLowerCase(),fk=$('fPark').value.toLowerCase(),fs=$('fState').value,flr=$('fLockReason').value.toLowerCase(),fv=$('fValidity').value.toLowerCase(),ft=$('fType').value.toLowerCase(),ff=$('fFinding').value.toLowerCase(),frv=$('fReview').value,fo=$('fOwner').value.toLowerCase();
+ return users.filter(u=>(!q||[u.username,u.fullName,u.department,u.lockReason,...(u.roles||[]),...(u.postTcodes||[]),...(u.parkTcodes||[]),...(u.otherTcodes||[])].join(' ').toLowerCase().includes(q))&&(!rf||u.risk===rf)&&(!af||u.access===af)&&(!sf||u.accountState===sf)&&(!fr||u.risk===fr)&&(!fu||u.username.toLowerCase().includes(fu))&&(!fn||u.fullName.toLowerCase().includes(fn))&&(!fa||u.access===fa)&&(!fp||u.postTcodes.join(' ').toLowerCase().includes(fp))&&(!fk||u.parkTcodes.join(' ').toLowerCase().includes(fk))&&(!fs||u.accountState===fs)&&(!flr||String(u.lockReason||'').toLowerCase().includes(flr))&&(!fv||String(u.validTo||'').toLowerCase().includes(fv))&&(!ft||u.userType.toLowerCase().includes(ft))&&(!ff||u.finding.toLowerCase().includes(ff))&&(!frv||u.reviewStatus===frv)&&(!fo||u.owner.toLowerCase().includes(fo))).sort((a,b)=>({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[b.risk]-({HIGH:4,MEDIUM:3,LOW:2,INFO:1}[a.risk]))||a.username.localeCompare(b.username));
 }
 function accessLabel(u){return u.access==='BOTH'?'Post + Park':u.access==='POST'?'Post only':u.access==='PARK'?'Park only':'None'}
 function render(){
@@ -203,9 +288,10 @@ function render(){
  <td class="tcodes">${esc(u.postTcodes.join(', ')||'-')}</td>
  <td class="tcodes">${esc(u.parkTcodes.join(', ')||'-')}</td>
  <td>${esc(u.accountState)}</td>
+ <td>${esc(u.lockReason||'-')}</td>
  <td><div class="small">From: ${esc(u.validFrom||'-')}</div><div class="small">To: ${esc(u.validTo||'-')}</div></td>
  <td>${esc(u.userType||'-')}</td>
- <td>${esc(u.finding)}</td><td>${esc(u.reviewStatus)}</td><td>${esc(u.owner)}</td></tr>`).join('')||'<tr><td colspan="12">No matching SAP access records.</td></tr>';
+ <td>${esc(u.finding)}</td><td>${esc(u.reviewStatus)}</td><td>${esc(u.owner)}</td></tr>`).join('')||'<tr><td colspan="13">No matching SAP access records.</td></tr>';
  document.querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>window.location.href=window.location.pathname+'?user='+encodeURIComponent(r.dataset.id));
  const both=users.filter(u=>u.access==='BOTH').length,post=users.filter(u=>u.access==='POST').length,park=users.filter(u=>u.access==='PARK').length,locked=users.filter(u=>u.accountState==='Locked').length,expired=users.filter(u=>u.accountState==='Expired').length;
  $('metrics').innerHTML=[['Total Users',users.length],['Post + Park',both],['Post Only',post],['Park Only',park],['Locked',locked],['Expired',expired]].map(([a,b])=>`<div class="metric"><b>${b}</b><span>${a}</span></div>`).join('');
@@ -215,11 +301,13 @@ function renderDetail(){
  const u=users.find(x=>x.id===selectedId);if(!u){$('detail').style.display='none';return}$('detail').style.display='block';
  $('detail').innerHTML=`<h2>${esc(u.username)} • SAP Access Analysis</h2><div class="detail-grid">
  <div class="box"><b>Risk</b><span>${esc(u.risk)}\n${esc(accessLabel(u))}</span></div>
- <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}</span></div>
+ <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}\nReason: ${esc(u.lockReason||'-')}</span></div>
  <div class="box"><b>Review Status / Owner</b><span>${esc(u.reviewStatus)}\n${esc(u.owner)}</span></div>
  <div class="box"><b>User</b><span>${esc(u.username)}\n${esc(u.fullName||'-')}\n${esc(u.department||'-')}</span></div>
  <div class="box"><b>Validity</b><span>From: ${esc(u.validFrom||'-')}\nTo: ${esc(u.validTo||'-')}</span></div>
  <div class="box"><b>User Type</b><span>${esc(u.userType||'-')}</span></div>
+ <div class="box"><b>SAP Roles</b><span>${esc((u.roles||[]).join('\n')||'-')}</span></div>
+ <div class="box"><b>Other / Unclassified T-Codes</b><span>${esc((u.otherTcodes||[]).join('\n')||'-')}</span></div>
  <div class="box"><b>Posting T-Codes</b><span>${esc(u.postTcodes.join('\n')||'-')}</span></div>
  <div class="box"><b>Parking T-Codes</b><span>${esc(u.parkTcodes.join('\n')||'-')}</span></div>
  <div class="box"><b>Source Rows</b><span>${esc((u.sourceRows||[]).length)} imported records</span></div>
@@ -250,7 +338,7 @@ function advance(id){const order=['New','Under Review','Approved','Remediation R
 function markRemediation(id){const u=users.find(x=>x.id===id);if(!u)return;u.reviewStatus='Remediation Required';save();render()}
 function removeUser(id){users=users.filter(x=>x.id!==id);selectedId=users[0]?.id;save();render()}
 function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
-function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Full_Name:u.fullName,Department:u.department,Access:accessLabel(u),Posting_TCodes:u.postTcodes.join('; '),Parking_TCodes:u.parkTcodes.join('; '),Account_State:u.accountState,Lock_Status:u.lockRaw,Valid_From:u.validFrom,Valid_To:u.validTo,User_Type:u.userType,Finding:u.finding,Recommendation:u.recommendation,Review_Status:u.reviewStatus,Owner:u.owner}))}
+function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Full_Name:u.fullName,Department:u.department,Access:accessLabel(u),Posting_TCodes:u.postTcodes.join('; '),Parking_TCodes:u.parkTcodes.join('; '),Account_State:u.accountState,Lock_Status:u.lockRaw,Reason_for_User_Lock:u.lockReason||'',SAP_Roles:(u.roles||[]).join('; '),Other_TCodes:(u.otherTcodes||[]).join('; '),Valid_From:u.validFrom,Valid_To:u.validTo,User_Type:u.userType,Finding:u.finding,Recommendation:u.recommendation,Review_Status:u.reviewStatus,Owner:u.owner}))}
 function downloadCsv(){
  const rows=exportRows(filtered());if(!rows.length)return alert('No data to export.');const h=Object.keys(rows[0]);const text=[h.join(','),...rows.map(r=>h.map(k=>csvEscape(r[k])).join(','))].join('\r\n');const b=new Blob([text],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SAP_Post_Park_Access_Review.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -261,15 +349,15 @@ function exportExcel(){
 }
 $('sapFile').onchange=async e=>{
  const file=e.target.files?.[0];if(!file)return;
- try{const recs=await importFile(file);if(!recs.length){$('importStatus').textContent='Import failed: no user records detected. Check the header names.';return}
- aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;$('importStatus').textContent=`Imported ${recs.length} SAP access rows from ${file.name}. Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.`;render();
+ try{const result=await importFile(file);const recs=result.records;if(!recs.length){$('importStatus').textContent='Import failed: no user records detected across the workbook sheets.';return}
+ aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;$('importStatus').textContent=`Read ${result.sheetCount} sheet(s), ${result.roleMappings} role mapping(s), ${result.assignments} user-role assignment(s). Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.`;render();
  }catch(err){$('importStatus').textContent='Import failed: '+err.message}
 };
 $('sapForm').onsubmit=e=>{
  e.preventDefault();const rec={username:$('userId').value.trim(),fullName:$('fullName').value.trim(),access:$('accessType').value,tcode:$('tcode').value.trim(),lockRaw:$('lockStatus').value==='Locked'?'Locked':'',validFrom:$('validFrom').value,validTo:$('validTo').value,userType:$('userType').value.trim(),department:$('department').value.trim(),sourceSheet:'Manual'};
  aggregate([rec],true);const u=users.find(x=>x.username.toLowerCase()===rec.username.toLowerCase());if(u){u.reviewStatus=$('reviewStatus').value;u.owner=$('owner').value;Object.assign(u,analyzeUser(u));selectedId=u.id}save();e.target.reset();render();
 };
-['search','riskFilter','accessFilter','stateFilter','fRisk','fUser','fName','fAccess','fPost','fPark','fState','fValidity','fType','fFinding','fReview','fOwner'].forEach(id=>$(id).oninput=render);
+['search','riskFilter','accessFilter','stateFilter','fRisk','fUser','fName','fAccess','fPost','fPark','fState','fLockReason','fValidity','fType','fFinding','fReview','fOwner'].forEach(id=>$(id).oninput=render);
 $('clearBtn').onclick=()=>{if(confirm('Clear all SAP Post/Park analysis data?')){users=[];selectedId=null;save();render();$('importStatus').textContent='All data cleared.'}};
 $('exportCsvBtn').onclick=downloadCsv;$('exportExcelBtn').onclick=exportExcel;
 const requested=new URLSearchParams(window.location.search).get('user');if(requested){const u=users.find(x=>x.id===requested);if(u)renderFullUser(u);else render()}else render();
