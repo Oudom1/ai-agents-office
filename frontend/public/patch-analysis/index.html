@@ -346,19 +346,37 @@ function extractReviewIds(p){
 }
 function reviewLinks(p){
  const ids=extractReviewIds(p), links=[];
+ const query=[...ids.kbs,...ids.cves,p.patchName,p.vulnerability,p.product].filter(Boolean).join(' ').trim();
  ids.kbs.forEach(kb=>{
-   links.push({label:'Microsoft Update Catalog • '+kb,url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(kb)});
-   links.push({label:'Microsoft Support Search • '+kb,url:'https://support.microsoft.com/search/results?query='+encodeURIComponent(kb)});
+   links.push({group:'Official Patch',label:'Microsoft Update Catalog • '+kb,url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(kb)});
+   links.push({group:'Official Patch',label:'Microsoft Support • '+kb,url:'https://support.microsoft.com/search/results?query='+encodeURIComponent(kb)});
  });
  ids.cves.forEach(cve=>{
-   links.push({label:'Microsoft MSRC • '+cve,url:'https://msrc.microsoft.com/update-guide/vulnerability/'+encodeURIComponent(cve)});
-   links.push({label:'NVD • '+cve,url:'https://nvd.nist.gov/vuln/detail/'+encodeURIComponent(cve)});
-   links.push({label:'CVE.org • '+cve,url:'https://www.cve.org/CVERecord?id='+encodeURIComponent(cve)});
+   links.push({group:'Vulnerability',label:'Microsoft MSRC • '+cve,url:'https://msrc.microsoft.com/update-guide/vulnerability/'+encodeURIComponent(cve)});
+   links.push({group:'Vulnerability',label:'NVD • '+cve,url:'https://nvd.nist.gov/vuln/detail/'+encodeURIComponent(cve)});
+   links.push({group:'Vulnerability',label:'CVE.org • '+cve,url:'https://www.cve.org/CVERecord?id='+encodeURIComponent(cve)});
  });
+ links.push({group:'Threat Intelligence',label:'CISA Known Exploited Vulnerabilities',url:'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'});
+ if(query){
+   links.push({group:'Known Issues',label:'Microsoft known issues / support search',url:'https://support.microsoft.com/search/results?query='+encodeURIComponent(query)});
+   links.push({group:'Security News',label:'Google News • related patch/CVE',url:'https://www.google.com/search?tbm=nws&q='+encodeURIComponent(query)});
+   links.push({group:'Security News',label:'BleepingComputer • related reports',url:'https://www.google.com/search?q='+encodeURIComponent('site:bleepingcomputer.com '+query)});
+   links.push({group:'Security News',label:'The Hacker News • related reports',url:'https://www.google.com/search?q='+encodeURIComponent('site:thehackernews.com '+query)});
+   links.push({group:'Threat Intelligence',label:'Exploit-DB • search',url:'https://www.exploit-db.com/search?q='+encodeURIComponent(ids.cves[0]||ids.kbs[0]||p.patchName||p.vulnerability||'')});
+ }
  if(!ids.kbs.length && p.patchName){
-   links.push({label:'Search Microsoft Update Catalog',url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(p.patchName)});
+   links.push({group:'Official Patch',label:'Search Microsoft Update Catalog',url:'https://www.catalog.update.microsoft.com/Search.aspx?q='+encodeURIComponent(p.patchName)});
  }
  return links;
+}
+function groupedReviewLinksHtml(p){
+ const links=reviewLinks(p);
+ if(!links.length)return '<span class="muted">No relevant identifier was detected for automatic links.</span>';
+ const groups=[...new Set(links.map(l=>l.group))];
+ return groups.map(g=>{
+   const items=links.filter(l=>l.group===g);
+   return '<div style="margin:10px 0"><div class="small" style="font-weight:800;text-transform:uppercase;color:#8fb7cc;margin-bottom:6px">'+esc(g)+'</div><div class="review-links">'+items.map(l=>'<a target="_blank" rel="noreferrer" href="'+esc(l.url)+'">'+esc(l.label)+' ↗</a>').join('')+'</div></div>';
+ }).join('');
 }
 function renderFullPatchPage(p){
  const b=benchmarkInfo(p), impacts=impactAnalysis(p), links=reviewLinks(p);
@@ -392,8 +410,8 @@ function renderFullPatchPage(p){
      <div class="box" style="grid-column:1/-1"><b>Recommended Operation</b><span>${esc(p.action)}</span></div>
      <div class="box" style="grid-column:1/-1"><b>Rollback / Validation Guidance</b><span>${esc(impacts.rollback)}</span></div>
      <div class="box" style="grid-column:1/-1">
-       <b>Relevant Patch Review Links</b>
-       <div class="review-links">${links.length?links.map(l=>'<a target="_blank" rel="noreferrer" href="'+esc(l.url)+'">'+esc(l.label)+' ↗</a>').join(''):'<span class="muted">No KB/CVE identifier was detected in this record. Use the patch name/vendor portal for manual verification.</span>'}</div>
+       <b>Threat & Patch Intelligence Resources</b>
+       <div class="review-links">${groupedReviewLinksHtml(p)}</div>
      </div>
      <div class="box" style="grid-column:1/-1"><b>Source Note</b><span>This import contains system counts, not individual hostnames. Import a device-level export later to map this patch to exact computers.</span></div>
    </div>
