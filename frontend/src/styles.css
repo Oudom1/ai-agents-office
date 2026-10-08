@@ -8,3 +8,11 @@
 .result-card{content-visibility:visible!important;contain:none!important;padding:12px 10px;margin:7px 0;border:1px solid #1d3a52;border-radius:10px;background:#0a1928;min-height:0!important}
 .result-duration-native{font-size:10px;font-weight:800;color:#8ff0b7;margin:7px 0}
 @media(max-width:560px){.break-controls{grid-template-columns:1fr 1fr!important}.snack-food,.lunch-food{font-size:14px}}
+
+/* Keep the office simulation visible while reviewing long task panels. */
+@media (min-width: 1051px) {
+  main { align-items: start; }
+  .office-card { position: sticky; top: 12px; align-self: start; }
+}
+/* Improve task text legibility in dense task lists. */
+.task-card,.result-card { overflow-wrap: anywhere; }
