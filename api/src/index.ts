@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
-import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog } from './auth-store.js';
+import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog, databaseHealth } from './auth-store.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -145,6 +145,16 @@ app.get('/api/health', (_req,res)=>res.json({
   uptimeSec:Math.floor(process.uptime()),
   now:new Date().toISOString()
 }));
+
+app.get('/api/database/health', requireAuth, async (_req,res)=>{
+  const db=await databaseHealth();
+  return res.status(db.connected?200:503).json({
+    ...db,
+    sharedTaskStorage:false,
+    taskStore:'in-memory',
+    recommendation:'Do not route task writes to multiple API replicas before implementing persistent task storage.'
+  });
+});
 
 app.post('/api/auth/handshake',(req,res)=>{
   if(!ADMIN_PASSWORD && !databaseConfigured()) return res.status(503).json({error:'Security backend is not configured'});
