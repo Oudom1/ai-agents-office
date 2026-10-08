@@ -1,4 +1,5 @@
 import express from 'express';
+import { registerPluginCatalog } from './plugin-catalog.js';
 import cors from 'cors';
 import { randomBytes, timingSafeEqual, createECDH, hkdfSync, createDecipheriv } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -346,6 +347,8 @@ function advanceOfficeTasks(){
 }
 advanceOfficeTasks();
 setInterval(advanceOfficeTasks,5000);
+
+registerPluginCatalog(app, requireAuth);
 
 app.get('/api/agents', requireAuth, (_req,res)=>res.json(agents));
 app.get('/api/tasks', requireAuth, (_req,res)=>res.json(tasks));

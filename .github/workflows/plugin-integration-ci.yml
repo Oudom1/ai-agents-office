@@ -1,0 +1,75 @@
+name: Plugin integration validation
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'package*.json'
+      - '.github/workflows/plugin-integration-ci.yml'
+  push:
+    branches: [feature/plugin-catalog-review]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies for validation (lockfile currently out of sync)
+        run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - name: Build workspaces (TypeScript and Vite)
+        run: npm run build
+      - name: Ensure plugin routes are authenticated and inert
+        run: node --input-type=module -e "
+          import {readFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const api=readFileSync('api/src/plugin-catalog.ts','utf8');
+          const main=readFileSync('api/src/index.ts','utf8');
+          const ui=readFileSync('frontend/src/PluginManager.tsx','utf8');
+          assert.match(api,/app\.get\('\/api\/plugins',requireAuth/);
+          assert.match(api,/app\.get\('\/api\/plugins\/:id',requireAuth/);
+          assert.match(api,/status:'not-installed'/);
+          assert.match(api,/enabled:false/);
+          assert.match(main,/registerPluginCatalog\(app, requireAuth\)/);
+          assert.match(ui,/not installed or enabled/);
+          console.log('Plugin security regression checks passed');
+          "
+
+      - name: Test live API server and plugin access controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PORT=4567
+          export ADMIN_PASSWORD="temporary-ci-only-password-not-production"
+          node api/dist/index.js >/tmp/plugin-api.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:4567/api/health >/tmp/plugin-health.json; then break; fi
+            sleep 1
+          done
+          grep -q '"ok":true' /tmp/plugin-health.json
+          for route in /api/plugins /api/plugins/claude-mem /api/plugins/nonexistent; do
+            status=$(curl -s -o /tmp/plugin-response.json -w '%{http_code}' "http://127.0.0.1:4567$route")
+            test "$status" = 401 || { echo "$route should reject unauthenticated requests, got $status"; exit 1; }
+          done
+          echo "Live API health and plugin authentication checks passed."
+      - name: Test external source connectivity (metadata only, no execution)
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in thedotmack/claude-mem addyosmani/agent-skills Henrikmatos/omniroute DietrichGebert/ponytail blockflix/Graphify; do
+            status=$(curl --retry 2 --max-time 15 -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -o /tmp/plugin-metadata.json -w '%{http_code}' "https://api.github.com/repos/$repo")
+            echo "$repo GitHub metadata HTTP $status"
+            if [ "$status" != 200 ]; then echo "::warning::$repo GitHub metadata HTTP $status; external connectivity unverified"; fi
+          done
+          echo "Source metadata probe completed; inspect warnings for endpoints not verified. No installation attempted."
