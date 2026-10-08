@@ -337,6 +337,7 @@ function App() {
     const title = name === 'IT Comedy' ? makeItComedyPrompt() : fallbackPrompt;
     setSelected('implement');
     setTaskTitle('');
+    window.scrollTo({top: 0, behavior: 'smooth'});
     await startKaiProviderTask(title);
   };
 
@@ -345,12 +346,18 @@ function App() {
     addLocalTask('developer', prompt);
     setTaskTitle('');
     setNotice(`Alex assigned ${name} to Leo`);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
+  const restoreOfficeView = () => {
+    window.scrollTo({top: 0, behavior: 'smooth'});
   };
 
   const assign = async (forcedAgentId?: string) => {
     if (!taskTitle.trim()) return;
     const title = taskTitle.trim();
     const targetAgent = forcedAgentId ?? selected;
+    restoreOfficeView();
 
     if (targetAgent === 'implement') {
       setTaskTitle('');
