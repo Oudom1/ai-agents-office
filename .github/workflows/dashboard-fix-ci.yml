@@ -1,0 +1,21 @@
+name: Dashboard fix validation
+on:
+  push:
+    branches: [fix/office-scroll-visibility]
+  pull_request:
+    paths: ['frontend/**']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: npm run build -w frontend
+      - name: Check assignment and blocker controls
+        run: |
+          grep -q 'restoreOfficeView()' frontend/src/main.tsx
+          grep -q 'Submit to Alex' frontend/src/main.tsx
+          grep -q 'onBlocker={() => openBlocker(t)}' frontend/src/main.tsx
