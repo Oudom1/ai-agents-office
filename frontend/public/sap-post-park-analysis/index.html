@@ -122,10 +122,7 @@ function dateValue(v){
  return s;
 }
 function isLocked(v){
- const s=clean(v).toLowerCase();
- if(s==='x'||s==='yes'||s==='true'||s==='locked'||s==='1'||s.includes('lock'))return true;
- const n=Number(s);
- return Number.isFinite(n)&&n!==0;
+ return clean(v).toUpperCase()==='X';
 }
 function reasonFrom(row){return findVal(row,['Reason for User Lock','Reason User Lock','Lock Reason','Reason for Lock','User Lock Reason'])}
 function createdDateFrom(row){return dateValue(findVal(row,['Creation Date of User Master','User Created Date','Creation Date','Created Date']))}
@@ -137,7 +134,12 @@ function fullnameFrom(row){return findVal(row,['Full Name','Name','User Full Nam
 function userTypeFrom(row){return findVal(row,['User Type','User type'])}
 function validFromFrom(row){return dateValue(findVal(row,['Valid From','Validity From','From Date','Start date','Start Date']))}
 function validToFrom(row){return dateValue(findVal(row,['Valid To','Validity To','To Date','Valid until','End date','End Date']))}
-function lockFrom(row){return findVal(row,['Locked','Lock status','User Lock','Lock','Account Lock'])}
+function lockedXFrom(row){
+   const entries=Object.entries(row||{});
+   const hit=entries.find(([k])=>normKey(k)==='locked');
+   return hit?clean(hit[1]):'';
+ }
+ function lockFrom(row){return lockedXFrom(row)}
 function departmentFrom(row){return findVal(row,['Department','Org Unit','Business Unit','Remark','Description'])}
 
 function classifyAccess(tcode='',sheetName='',typeText=''){
@@ -313,7 +315,7 @@ async function importFile(file){
    const p=profiles.get(key);
    if(p&&isLocked(p.lockRaw)){
      p.passwordLockDate=event.date;
-     p.lockReason=event.text||'Administrator Lock';
+     p.lockReason='Administrator Lock';
    }
  }
 
@@ -346,9 +348,9 @@ async function importFile(file){
    const currentlyLocked=isLocked(profile?.lockRaw||r.lockRaw||'');
    return {
      ...r,
-     // Populate audit lock reason/date only when the user's current Locked value is X/locked
-     // AND the raw change-document history contains an Administrator Lock event.
-     lockReason:(currentlyLocked&&lockEvent)?(lockEvent.text||'Administrator Lock'):'',
+     // Current lock state comes ONLY from the raw Locked column and must equal X.
+     // For those users only, show Administrator Lock and the latest matching Modification date.
+     lockReason:(currentlyLocked&&lockEvent)?'Administrator Lock':'',
      passwordLockDate:(currentlyLocked&&lockEvent)?lockEvent.date:'',
      createdDate:profile?.createdDate||r.createdDate||'',
      userType:profile?.userType||''
