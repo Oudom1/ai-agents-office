@@ -1,0 +1,20 @@
+name: Task freeze regression build
+on:
+  push:
+    branches: [fix/task-list-freeze]
+  pull_request:
+    paths: ['frontend/**']
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: npm run build -w frontend
+      - name: Assert bounded task rendering
+        run: |
+          grep -q 'activeTasks.slice(0, showAllActive ? 100 : 12)' frontend/src/main.tsx
+          grep -q 'if (!document.hidden)' frontend/src/main.tsx
