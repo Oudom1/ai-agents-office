@@ -108,9 +108,18 @@ function findVal(row,names){
 }
 
 function dateValue(v){
- if(!v)return'';
- if(typeof v==='number'&&window.XLSX){const d=XLSX.SSF.parse_date_code(v);if(d)return [d.y,String(d.m).padStart(2,'0'),String(d.d).padStart(2,'0')].join('-')}
- const s=clean(v);const d=new Date(s);return Number.isFinite(d.getTime())?d.toISOString().slice(0,10):s;
+ if(v===null||v===undefined||v==='')return'';
+ if(typeof v==='number'&&window.XLSX){
+   const d=XLSX.SSF.parse_date_code(v);
+   if(d)return String(d.m)+'/'+String(d.d)+'/'+String(d.y);
+ }
+ const s=clean(v);
+ // Preserve raw SAP/Excel date text exactly when already date-like.
+ if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s))return s;
+ if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+   const [y,m,d]=s.split('-'); return Number(m)+'/'+Number(d)+'/'+y;
+ }
+ return s;
 }
 function isLocked(v){
  const s=clean(v).toLowerCase();
@@ -264,8 +273,13 @@ async function importFile(file){
    const key=user.toLowerCase();
    const event={date:mod,newValue:newValueFrom(row),text:newValueTextFrom(row),sheetName};
    const prior=lockEvents.get(key);
-   const currentTime=new Date(mod).getTime();
-   const priorTime=prior?new Date(prior.date).getTime():-Infinity;
+   const dateRank=x=>{
+     const m=String(x||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+     if(m)return Number(m[3])*10000+Number(m[1])*100+Number(m[2]);
+     return 0;
+   };
+   const currentTime=dateRank(mod);
+   const priorTime=prior?dateRank(prior.date):-Infinity;
    if(!prior||currentTime>=priorTime)lockEvents.set(key,event);
  };
  for(const sh of parsed){
@@ -290,7 +304,10 @@ async function importFile(file){
  // from the change-document sheet (Modification date), when available.
  for(const [key,event] of lockEvents.entries()){
    const p=profiles.get(key);
-   if(p)p.passwordLockDate=event.date;
+   if(p){
+     p.passwordLockDate=event.date;
+     p.lockReason=event.text||'Administrator Lock';
+   }
  }
 
  const joined=[];
@@ -321,7 +338,9 @@ async function importFile(file){
    const lockEvent=lockEvents.get(key);
    return {
      ...r,
+     lockReason:lockEvent?.text||profile?.lockReason||'',
      passwordLockDate:lockEvent?.date||'',
+     createdDate:profile?.createdDate||r.createdDate||'',
      userType:profile?.userType||''
    };
  });
@@ -415,12 +434,7 @@ function tcodeTypeText(tc,access){
  return known[k]||(access==='Park'?'Park G/L Account Items':'Posting transaction');
 }
 function excelDateText(v){
- const s=String(v||'').trim();
- if(!s)return'';
- if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s))return s;
- const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
- if(m)return Number(m[2])+'/'+Number(m[3])+'/'+m[1];
- return s;
+ return String(v||'').trim();
 }
 function sapExportRows(access){
  const out=[];
@@ -440,8 +454,8 @@ function sapExportRows(access){
        'Full Name':u.fullName||'',
        'Locked':u.accountState==='Locked'?'X':'',
        'Reason for User Lock':u.lockReason||'',
-       'User created date':excelDateText(u.createdDate||''),
-       'Date Locked user':excelDateText(u.passwordLockDate||''),
+       'User created date':u.createdDate||'',
+       'Date Locked user':u.passwordLockDate||'',
        'Tcode':tc,
        'Type':typeText,
        'Valid From':excelDateText(u.validFrom||''),
@@ -495,7 +509,7 @@ function exportExcel(){
 $('sapFile').onchange=async e=>{
  const file=e.target.files?.[0];if(!file)return;
  try{const result=await importFile(file);const recs=result.records;if(!recs.length){$('importStatus').textContent='Import failed: no user records detected across the workbook sheets.';return}
- aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;const parkCount=users.reduce((n,u)=>n+(u.parkTcodes||[]).length,0);const postCount=users.reduce((n,u)=>n+(u.postTcodes||[]).length,0);const parkNote=parkCount===0?' ⚠ No Parking transaction was detected in this workbook (for example FV50), so the Parking export will be empty until parking source data is included.':'';$('importStatus').textContent=`Read ${result.sheetCount} sheet(s), ${result.roleMappings} role mapping(s), ${result.assignments} user-role assignment(s), and ${result.lockEvents||0} administrator lock event(s) from Modification date. Detected ${postCount} posting access record(s) and ${parkCount} parking access record(s). Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.${parkNote}`;render();
+ aggregate(recs,$('importMode').value==='append');selectedId=users[0]?.id;save();const both=users.filter(u=>u.access==='BOTH').length;const parkCount=users.reduce((n,u)=>n+(u.parkTcodes||[]).length,0);const postCount=users.reduce((n,u)=>n+(u.postTcodes||[]).length,0);const parkNote=parkCount===0?' ⚠ No Parking transaction was detected in this workbook (for example FV50), so the Parking export will be empty until parking source data is included.':'';$('importStatus').textContent=`Read ${result.sheetCount} sheet(s), ${result.roleMappings} role mapping(s), ${result.assignments} user-role assignment(s), and ${result.lockEvents||0} Administrator Lock event(s) from raw change-document Modification date. Detected ${postCount} posting access record(s) and ${parkCount} parking access record(s). Analyzed ${users.length} unique users and found ${both} potential Post + Park conflicts.${parkNote}`;render();
  }catch(err){$('importStatus').textContent='Import failed: '+err.message}
 };
 $('sapForm').onsubmit=e=>{
