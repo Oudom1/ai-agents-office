@@ -41,3 +41,33 @@ jobs:
           assert.match(ui,/not installed or enabled/);
           console.log('Plugin security regression checks passed');
           "
+
+      - name: Test live API server and plugin access controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PORT=4567
+          export ADMIN_PASSWORD="temporary-ci-only-password-not-production"
+          node api/dist/index.js >/tmp/plugin-api.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:4567/api/health >/tmp/plugin-health.json; then break; fi
+            sleep 1
+          done
+          grep -q '"ok":true' /tmp/plugin-health.json
+          for route in /api/plugins /api/plugins/claude-mem /api/plugins/nonexistent; do
+            status=$(curl -s -o /tmp/plugin-response.json -w '%{http_code}' "http://127.0.0.1:4567$route")
+            test "$status" = 401 || { echo "$route should reject unauthenticated requests, got $status"; exit 1; }
+          done
+          echo "Live API health and plugin authentication checks passed."
+      - name: Test external source connectivity (metadata only, no execution)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in thedotmack/claude-mem addyosmani/agent-skills Henrikmatos/omniroute DietrichGebert/ponytail blockflix/Graphify; do
+            status=$(curl --retry 2 --max-time 15 -s -o /tmp/plugin-metadata.json -w '%{http_code}' "https://api.github.com/repos/$repo")
+            echo "$repo GitHub metadata HTTP $status"
+            test "$status" = 200 || exit 1
+          done
+          echo "Plugin source metadata endpoints reachable. No installation attempted."
