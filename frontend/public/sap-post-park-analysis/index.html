@@ -114,9 +114,13 @@ function dateValue(v){
 }
 function isLocked(v){
  const s=clean(v).toLowerCase();
- return s==='x'||s==='yes'||s==='true'||s==='locked'||s==='1'||s.includes('lock');
+ if(s==='x'||s==='yes'||s==='true'||s==='locked'||s==='1'||s.includes('lock'))return true;
+ const n=Number(s);
+ return Number.isFinite(n)&&n!==0;
 }
 function reasonFrom(row){return findVal(row,['Reason for User Lock','Reason User Lock','Lock Reason','Reason for Lock','User Lock Reason'])}
+function createdDateFrom(row){return dateValue(findVal(row,['Creation Date of User Master','User Created Date','Creation Date','Created Date']))}
+function passwordLockDateFrom(row){return dateValue(findVal(row,['Date: Password Lock','Date Password Lock','Password Lock Date','Date Locked User','Locked Date']))}
 function tcodeFrom(row){return findVal(row,['T-code','Tcode','Transaction Code','Transaction','T Code','T-Code(s)','Extended name','Extended Name','Role/T-Code'])}
 function roleFrom(row){return findVal(row,['Role','Role Name','SAP Role','Composite Role'])}
 function usernameFrom(row){return findVal(row,['User name','Username','User ID','User','SAP User','SAP Username','Account'])}
@@ -183,6 +187,8 @@ function rawRecord(row,access,sheetName,profile={}){
    role:roleFrom(row),
    lockRaw:lockFrom(row)||profile.lockRaw||'',
    lockReason:reasonFrom(row)||profile.lockReason||'',
+   createdDate:createdDateFrom(row)||profile.createdDate||'',
+   passwordLockDate:passwordLockDateFrom(row)||profile.passwordLockDate||'',
    validFrom:validFromFrom(row)||profile.validFrom||'',
    validTo:validToFrom(row)||profile.validTo||'',
    userType:userTypeFrom(row)||profile.userType||'',
@@ -196,9 +202,10 @@ function aggregate(records,append=false){
  for(const r of records){
   if(!r||!r.username)continue;const k=r.username.toLowerCase();
   let u=map.get(k);
-  if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],otherTcodes:[],roles:[],lockRaw:r.lockRaw||'',lockReason:r.lockReason||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
+  if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],otherTcodes:[],roles:[],lockRaw:r.lockRaw||'',lockReason:r.lockReason||'',createdDate:r.createdDate||'',passwordLockDate:r.passwordLockDate||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
   if(!u.fullName&&r.fullName)u.fullName=r.fullName;if(!u.department&&r.department)u.department=r.department;if(!u.userType&&r.userType)u.userType=r.userType;
   if(r.lockRaw)u.lockRaw=r.lockRaw;if(r.lockReason)u.lockReason=r.lockReason;
+  if(r.createdDate)u.createdDate=r.createdDate;if(r.passwordLockDate)u.passwordLockDate=r.passwordLockDate;
   if(!u.validFrom&&r.validFrom)u.validFrom=r.validFrom;if(r.validTo)u.validTo=r.validTo;
   if(r.role&&!u.roles.includes(r.role))u.roles.push(r.role);
   if(r.access==='Post'&&r.tcode&&!u.postTcodes.includes(r.tcode))u.postTcodes.push(r.tcode);
@@ -247,8 +254,9 @@ async function importFile(file){
      if(role&&tc)addRoleTcode(role,tc);
      if(user){
        const key=user.toLowerCase();
-       const p=profiles.get(key)||{username:user,fullName:'',lockRaw:'',lockReason:'',validFrom:'',validTo:'',userType:'',department:''};
+       const p=profiles.get(key)||{username:user,fullName:'',lockRaw:'',lockReason:'',createdDate:'',passwordLockDate:'',validFrom:'',validTo:'',userType:'',department:''};
        if(fullnameFrom(row))p.fullName=fullnameFrom(row);if(lockFrom(row))p.lockRaw=lockFrom(row);if(reason)p.lockReason=reason;
+       if(createdDateFrom(row))p.createdDate=createdDateFrom(row);if(passwordLockDateFrom(row))p.passwordLockDate=passwordLockDateFrom(row);
        if(validFromFrom(row))p.validFrom=validFromFrom(row);if(validToFrom(row))p.validTo=validToFrom(row);if(userTypeFrom(row))p.userType=userTypeFrom(row);if(departmentFrom(row))p.department=departmentFrom(row);
        profiles.set(key,p);
        if(role)assignments.push({username:user,role,validFrom:validFromFrom(row),validTo:validToFrom(row),sheetName:sh.name,row});
@@ -266,6 +274,7 @@ async function importFile(file){
        joined.push({
          username:a.username,fullName:profile.fullName||'',access:classifyAccess(tc,a.sheetName,''),
          tcode:tc,typeText:'',role:a.role,lockRaw:profile.lockRaw||'',lockReason:profile.lockReason||'',
+         createdDate:profile.createdDate||'',passwordLockDate:profile.passwordLockDate||'',
          validFrom:a.validFrom||profile.validFrom||'',validTo:a.validTo||profile.validTo||'',
          userType:profile.userType||'',department:profile.department||'',sourceSheet:a.sheetName+' + role mapping'
        });
@@ -309,7 +318,7 @@ function renderDetail(){
  const u=users.find(x=>x.id===selectedId);if(!u){$('detail').style.display='none';return}$('detail').style.display='block';
  $('detail').innerHTML=`<h2>${esc(u.username)} • SAP Access Analysis</h2><div class="detail-grid">
  <div class="box"><b>Risk</b><span>${esc(u.risk)}\n${esc(accessLabel(u))}</span></div>
- <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}\nReason: ${esc(u.lockReason||'-')}</span></div>
+ <div class="box"><b>Account State</b><span>${esc(u.accountState)}\nLock: ${esc(u.lockRaw||'-')}\nReason: ${esc(u.lockReason||'-')}\nUser created: ${esc(u.createdDate||'-')}\nDate locked user: ${esc(u.passwordLockDate||'-')}</span></div>
  <div class="box"><b>Review Status / Owner</b><span>${esc(u.reviewStatus)}\n${esc(u.owner)}</span></div>
  <div class="box"><b>User</b><span>${esc(u.username)}\n${esc(u.fullName||'-')}\n${esc(u.department||'-')}</span></div>
  <div class="box"><b>Validity</b><span>From: ${esc(u.validFrom||'-')}\nTo: ${esc(u.validTo||'-')}</span></div>
@@ -346,7 +355,7 @@ function advance(id){const order=['New','Under Review','Approved','Remediation R
 function markRemediation(id){const u=users.find(x=>x.id===id);if(!u)return;u.reviewStatus='Remediation Required';save();render()}
 function removeUser(id){users=users.filter(x=>x.id!==id);selectedId=users[0]?.id;save();render()}
 function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
-function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Full_Name:u.fullName,Department:u.department,Access:accessLabel(u),Posting_TCodes:u.postTcodes.join('; '),Parking_TCodes:u.parkTcodes.join('; '),Account_State:u.accountState,Lock_Status:u.lockRaw,Reason_for_User_Lock:u.lockReason||'',SAP_Roles:(u.roles||[]).join('; '),Other_TCodes:(u.otherTcodes||[]).join('; '),Valid_From:u.validFrom,Valid_To:u.validTo,User_Type:u.userType,Finding:u.finding,Recommendation:u.recommendation,Review_Status:u.reviewStatus,Owner:u.owner}))}
+function exportRows(list){return list.map(u=>({Risk:u.risk,User_ID:u.username,Full_Name:u.fullName,Department:u.department,Access:accessLabel(u),Posting_TCodes:u.postTcodes.join('; '),Parking_TCodes:u.parkTcodes.join('; '),Account_State:u.accountState,Lock_Status:u.lockRaw,Reason_for_User_Lock:u.lockReason||'',User_Created_Date:u.createdDate||'',Date_Locked_User:u.passwordLockDate||'',SAP_Roles:(u.roles||[]).join('; '),Other_TCodes:(u.otherTcodes||[]).join('; '),Valid_From:u.validFrom,Valid_To:u.validTo,User_Type:u.userType,Finding:u.finding,Recommendation:u.recommendation,Review_Status:u.reviewStatus,Owner:u.owner}))}
 function downloadCsv(){
  const rows=exportRows(filtered());if(!rows.length)return alert('No data to export.');const h=Object.keys(rows[0]);const text=[h.join(','),...rows.map(r=>h.map(k=>csvEscape(r[k])).join(','))].join('\r\n');const b=new Blob([text],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SAP_Post_Park_Access_Review.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -393,6 +402,8 @@ function sapExportRows(access){
        'Full Name':u.fullName||'',
        'Locked':u.accountState==='Locked'?'X':'',
        'Reason for User Lock':u.lockReason||'',
+       'User created date':excelDateText(u.createdDate||''),
+       'Date Locked user':excelDateText(u.passwordLockDate||''),
        'Tcode':tc,
        'Type':typeText,
        'Valid From':excelDateText(u.validFrom||''),
@@ -404,20 +415,20 @@ function sapExportRows(access){
  return out.sort((a,b)=>String(a['User name']).localeCompare(String(b['User name']))||String(a.Tcode).localeCompare(String(b.Tcode)));
 }
 function buildSapSheet(rows,title){
- const headers=['User name','Full Name','Locked','Reason for User Lock','Tcode','Type','Valid From','Valid To','User Type'];
+ const headers=['User name','Full Name','Locked','Reason for User Lock','User created date','Date Locked user','Tcode','Type','Valid From','Valid To','User Type'];
  const aoa=[
-   [title,'','','','','','','',''],
+   [title,'','','','','','','','','',''],
    headers,
    ...rows.map(r=>headers.map(h=>r[h]??''))
  ];
  const ws=XLSX.utils.aoa_to_sheet(aoa);
 
- ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:8}}];
- ws['!autofilter']={ref:'A2:I'+Math.max(2,rows.length+2)};
+ ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}}];
+ ws['!autofilter']={ref:'A2:K'+Math.max(2,rows.length+2)};
  ws['!freeze']={xSplit:0,ySplit:2,topLeftCell:'A3',activePane:'bottomLeft',state:'frozen'};
  ws['!cols']=[
-   {wch:14},{wch:26},{wch:12},{wch:26},{wch:14},
-   {wch:32},{wch:14},{wch:14},{wch:16}
+   {wch:14},{wch:26},{wch:12},{wch:26},{wch:18},{wch:18},
+   {wch:14},{wch:32},{wch:14},{wch:14},{wch:16}
  ];
  ws['!rows']=[{hpt:22},{hpt:20}];
 
