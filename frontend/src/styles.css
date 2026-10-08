@@ -8,3 +8,16 @@
 .result-card{content-visibility:visible!important;contain:none!important;padding:12px 10px;margin:7px 0;border:1px solid #1d3a52;border-radius:10px;background:#0a1928;min-height:0!important}
 .result-duration-native{font-size:10px;font-weight:800;color:#8ff0b7;margin:7px 0}
 @media(max-width:560px){.break-controls{grid-template-columns:1fr 1fr!important}.snack-food,.lunch-food{font-size:14px}}
+
+/* Keep the office simulation visible while reviewing long task panels. */
+@media (min-width: 1051px) {
+  main { align-items: start; }
+  .office-card { position: sticky; top: 12px; align-self: start; }
+}
+/* Improve task text legibility in dense task lists. */
+.task-card,.result-card { overflow-wrap: anywhere; }
+
+/* Assignment visibility and human-friendly blocker escalation */
+.blocker-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:18px;background:rgba(3,9,20,.82);backdrop-filter:blur(5px)}
+.blocker-dialog{width:min(560px,96vw);max-height:90vh;overflow:auto;border:1px solid #345775;border-radius:18px;padding:26px;background:linear-gradient(155deg,#13283c,#0a1524);color:#eaf2ff;box-shadow:0 30px 100px #000a}
+.blocker-dialog-head{display:flex;justify-content:space-between;gap:16px}.blocker-eyebrow{font-size:10px;font-weight:800;letter-spacing:2px;color:#76c9ff}.blocker-dialog h2{font-size:24px;margin:8px 0}.blocker-dialog p{color:#9eb7cc;font-size:13px;line-height:1.6}.blocker-dialog label{display:block;margin:18px 0 7px;font-size:12px;font-weight:700}.blocker-dialog textarea{width:100%;background:#081627;color:#eaf2ff;border:1px solid #345775;border-radius:10px;padding:12px;font:inherit;resize:vertical;min-height:110px}.blocker-task-ref{display:grid;gap:6px;padding:13px 15px;border:1px solid #284965;border-radius:12px;background:#0a1c2e;overflow-wrap:anywhere;font-size:12px}.blocker-task-ref b{color:#7dd6ff}.blocker-dialog .blocker-close{width:auto;height:35px;margin:0;background:#1b334b;border:1px solid #36536b}.blocker-footer{margin-top:18px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.blocker-footer span{font-size:11px;color:#8da6bb}.blocker-footer>div{display:flex;gap:9px}.blocker-footer button{width:auto;margin:0}.blocker-footer .blocker-cancel{background:#1c3145;border-color:#36536b}

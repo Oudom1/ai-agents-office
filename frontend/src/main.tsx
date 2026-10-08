@@ -146,6 +146,9 @@ function App() {
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now());
   const [showTypingTool, setShowTypingTool] = useState(false);
+  const [blockerTaskId, setBlockerTaskId] = useState<string | null>(null);
+  const [blockerReason, setBlockerReason] = useState('');
+  const [blockerPriority, setBlockerPriority] = useState('Medium');
 
   const refresh = async () => {
     try {
@@ -337,6 +340,7 @@ function App() {
     const title = name === 'IT Comedy' ? makeItComedyPrompt() : fallbackPrompt;
     setSelected('implement');
     setTaskTitle('');
+    window.scrollTo({top: 0, behavior: 'smooth'});
     await startKaiProviderTask(title);
   };
 
@@ -345,12 +349,18 @@ function App() {
     addLocalTask('developer', prompt);
     setTaskTitle('');
     setNotice(`Alex assigned ${name} to Leo`);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
+  const restoreOfficeView = () => {
+    window.scrollTo({top: 0, behavior: 'smooth'});
   };
 
   const assign = async (forcedAgentId?: string) => {
     if (!taskTitle.trim()) return;
     const title = taskTitle.trim();
     const targetAgent = forcedAgentId ?? selected;
+    restoreOfficeView();
 
     if (targetAgent === 'implement') {
       setTaskTitle('');
@@ -424,6 +434,25 @@ function App() {
     setNotice(blocker ? `${name} raised a blocker to Alex` : `${name} blocker cleared`);
   };
 
+  const openBlocker = (task: Task) => {
+    if (task.blocker) { toggleBlocker(task); return; }
+    setBlockerTaskId(task.id);
+    setBlockerReason('');
+    setBlockerPriority('Medium');
+  };
+  const submitBlocker = () => {
+    const reason = blockerReason.trim();
+    if (!reason || !blockerTaskId) return;
+    const task = tasks.find(t => t.id === blockerTaskId);
+    if (!task) { setBlockerTaskId(null); return; }
+    const name = agents.find(a => a.id === task.agentId)?.name || 'Agent';
+    patchTask(task.id, {blocker: '[' + blockerPriority + '] ' + reason});
+    updateLocal(task.agentId, {state: 'blocked'});
+    setNotice(name + ' raised a blocker to Alex');
+    setBlockerTaskId(null);
+  };
+  const blockerTask = tasks.find(t => t.id === blockerTaskId);
+  
   useEffect(() => {
     const dueTask = tasks.find(t => t.status !== 'done' && t.phase === 'working' && !t.blocker && getRemainingSeconds(t, now) <= 0);
     if (dueTask) completeTask(dueTask, true);
@@ -518,11 +547,22 @@ function App() {
 
           <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a => <div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><span style={{fontSize:'8px',color:'#6f8ca5'}}>{agentSkills[a.id].join(' • ')}</span><MiniProgress completed={completedByAgent[a.id] ?? 0} /></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
 
-          <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2><span>{activeTasks.length} running / queued</span></div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => toggleBlocker(t)} />)}</div>
+          <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2><span>{activeTasks.length} running / queued</span></div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => openBlocker(t)} />)}</div>
 
           <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
         </aside>
       </main>
+      {blockerTask && <div className="blocker-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setBlockerTaskId(null); }}>
+        <section className="blocker-dialog" role="dialog" aria-modal="true" aria-labelledby="blocker-dialog-title">
+          <div className="blocker-dialog-head"><div><span className="blocker-eyebrow">ESCALATE TO ALEX</span><h2 id="blocker-dialog-title">Raise an issue</h2><p>Explain what is stopping the agent. Alex can review the request on the task board.</p></div><button type="button" className="blocker-close" aria-label="Close" onClick={() => setBlockerTaskId(null)}>✕</button></div>
+          <div className="blocker-task-ref"><b>{agents.find(a=>a.id===blockerTask.agentId)?.name || 'Agent'}</b><span>{blockerTask.title}</span></div>
+          <label htmlFor="blocker-priority">Priority</label>
+          <select id="blocker-priority" value={blockerPriority} onChange={e => setBlockerPriority(e.target.value)}><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
+          <label htmlFor="blocker-description">Describe the issue</label>
+          <textarea id="blocker-description" value={blockerReason} maxLength={800} onChange={e => setBlockerReason(e.target.value)} placeholder="What is blocked? What have you tried? What help is needed?" rows={5} autoFocus />
+          <div className="blocker-footer"><span>{blockerReason.length}/800 characters</span><div><button type="button" className="blocker-cancel" onClick={()=>setBlockerTaskId(null)}>Cancel</button><button type="button" disabled={!blockerReason.trim()} onClick={submitBlocker}>Submit to Alex →</button></div></div>
+        </section>
+      </div>}
       {showTypingTool && <div onClick={() => setShowTypingTool(false)} style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(2,8,18,.86)',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px'}}><div onClick={e => e.stopPropagation()} style={{width:'min(1500px,96vw)',height:'min(920px,92vh)',background:'#081523',border:'1px solid #294b68',borderRadius:'14px',boxShadow:'0 24px 80px rgba(0,0,0,.55)',overflow:'hidden',display:'flex',flexDirection:'column'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #294b68',background:'#0d1d2d'}}><div><b style={{color:'#e9f7ff'}}>⌨ Leo Typing Tool</b><span style={{marginLeft:'10px',fontSize:'11px',color:'#6f8ca5'}}>Integrated training workspace</span></div><div style={{display:'flex',gap:'8px'}}><a href={TYPING_TOOL_URL} target="_blank" rel="noreferrer" style={{padding:'7px 10px',border:'1px solid #315878',borderRadius:'7px',color:'#bfe9ff',textDecoration:'none',fontSize:'11px'}}>Open Full Screen ↗</a><button onClick={() => setShowTypingTool(false)} style={{padding:'7px 11px',background:'#35121d',border:'1px solid #8f3d4b',borderRadius:'7px',color:'#ffd8e1'}}>Close</button></div></div><iframe title="Leo Typing Tool" src={TYPING_TOOL_URL} style={{width:'100%',height:'100%',border:0,background:'#07111c'}} allow="clipboard-read; clipboard-write" /></div></div>}
     </div>
   );
