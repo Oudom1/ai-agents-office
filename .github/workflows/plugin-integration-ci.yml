@@ -1,0 +1,42 @@
+name: Plugin integration validation
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'package*.json'
+      - '.github/workflows/plugin-integration-ci.yml'
+  push:
+    branches: [feature/plugin-catalog-review]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build workspaces (TypeScript and Vite)
+        run: npm run build
+      - name: Ensure plugin routes are authenticated and inert
+        run: node --input-type=module -e "
+          import {readFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const api=readFileSync('api/src/plugin-catalog.ts','utf8');
+          const main=readFileSync('api/src/index.ts','utf8');
+          const ui=readFileSync('frontend/src/PluginManager.tsx','utf8');
+          assert.match(api,/app\.get\('\/api\/plugins',requireAuth/);
+          assert.match(api,/app\.get\('\/api\/plugins\/:id',requireAuth/);
+          assert.match(api,/status:'not-installed'/);
+          assert.match(api,/enabled:false/);
+          assert.match(main,/registerPluginCatalog\(app, requireAuth\)/);
+          assert.match(ui,/not installed or enabled/);
+          console.log('Plugin security regression checks passed');
+          "
