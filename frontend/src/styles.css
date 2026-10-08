@@ -8,3 +8,9 @@
 .result-card{content-visibility:visible!important;contain:none!important;padding:12px 10px;margin:7px 0;border:1px solid #1d3a52;border-radius:10px;background:#0a1928;min-height:0!important}
 .result-duration-native{font-size:10px;font-weight:800;color:#8ff0b7;margin:7px 0}
 @media(max-width:560px){.break-controls{grid-template-columns:1fr 1fr!important}.snack-food,.lunch-food{font-size:14px}}
+
+.results-header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.clear-completed-btn{border:1px solid #1c9ffa;border-radius:999px;background:#07182e;color:#7cdbff;font-weight:700;padding:7px 13px;cursor:pointer;white-space:nowrap}
+.clear-completed-btn:hover:not(:disabled){background:#123b62;box-shadow:0 0 0 2px #008cff25}
+.clear-completed-btn:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:560px){.results-header-actions{gap:6px}.clear-completed-btn{font-size:12px;padding:6px 9px}}
