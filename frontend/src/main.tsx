@@ -145,6 +145,8 @@ function App() {
   const [taskTitle, setTaskTitle] = useState('');
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now());
+  const [showAllActive, setShowAllActive] = useState(false);
+  const [showAllDone, setShowAllDone] = useState(false);
   const [showTypingTool, setShowTypingTool] = useState(false);
 
   const refresh = async () => {
@@ -166,7 +168,7 @@ function App() {
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 4000);
+    const id = setInterval(() => { if (!document.hidden) void refresh(); }, 15000);
     return () => clearInterval(id);
   }, []);
 
@@ -192,9 +194,9 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { const id = setTimeout(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks.slice(0, 500))); } catch { /* storage full */ } }, 600); return () => clearTimeout(id); }, [tasks]);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => { if (!document.hidden) setNow(Date.now()); }, 5000);
     return () => clearInterval(id);
   }, []);
   useEffect(() => {
@@ -450,8 +452,8 @@ function App() {
   const clearDone = () => setTasks(prev => prev.filter(t => t.status !== 'done'));
   const workerAgents = useMemo(() => agents.filter(a => a.id !== 'manager'), [agents]);
   const completedByAgent = useMemo(() => Object.fromEntries(agents.map(a => [a.id, Math.min(TASK_TARGET, tasks.filter(t => t.agentId === a.id && t.status.toLowerCase() === 'done').length)])), [agents, tasks]);
-  const activeTasks = tasks.filter(t => t.status !== 'done');
-  const doneTasks = tasks.filter(t => t.status === 'done');
+  const activeTasks = useMemo(() => tasks.filter(t => t.status !== 'done'), [tasks]);
+  const doneTasks = useMemo(() => tasks.filter(t => t.status === 'done'), [tasks]);
   const blockers = activeTasks.filter(t => t.blocker).filter((t,i,arr) => arr.findIndex(x => x.agentId === t.agentId) === i);
   const kaiLatestTask = tasks.find(t => t.agentId === 'implement');
   const kaiProblem = kaiLatestTask && (kaiLatestTask.phase === 'provider-error' || kaiLatestTask.blocker)
@@ -518,9 +520,9 @@ function App() {
 
           <div className="panel"><div className="panel-title"><h2>Agent Status</h2><span>{activeTasks.length} active</span></div>{workerAgents.map(a => <div className="agent-row" key={a.id}><div className="agent-info"><b>{a.name}</b><span>{a.role}</span><span style={{fontSize:'8px',color:'#6f8ca5'}}>{agentSkills[a.id].join(' • ')}</span><MiniProgress completed={completedByAgent[a.id] ?? 0} /></div><em className={`badge ${a.state}`}>{friendlyState(a.state)}</em></div>)}</div>
 
-          <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2><span>{activeTasks.length} running / queued</span></div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => toggleBlocker(t)} />)}</div>
+          <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2><span>{activeTasks.length} running / queued</span></div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.slice(0, showAllActive ? 100 : 12).map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => toggleBlocker(t)} />)}{activeTasks.length > 12 && <button className="secondary" onClick={() => setShowAllActive(v => !v)}>{showAllActive ? 'Show first 12' : `Show more (${activeTasks.length})`}</button>}</div>
 
-          <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
+          <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><span>{doneTasks.length} complete</span></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0, showAllDone ? 100 : 12).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}{doneTasks.length > 12 && <button className="secondary" onClick={() => setShowAllDone(v => !v)}>{showAllDone ? 'Show first 12' : `Show more (${doneTasks.length})`}</button>}</div>
         </aside>
       </main>
       {showTypingTool && <div onClick={() => setShowTypingTool(false)} style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(2,8,18,.86)',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px'}}><div onClick={e => e.stopPropagation()} style={{width:'min(1500px,96vw)',height:'min(920px,92vh)',background:'#081523',border:'1px solid #294b68',borderRadius:'14px',boxShadow:'0 24px 80px rgba(0,0,0,.55)',overflow:'hidden',display:'flex',flexDirection:'column'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #294b68',background:'#0d1d2d'}}><div><b style={{color:'#e9f7ff'}}>⌨ Leo Typing Tool</b><span style={{marginLeft:'10px',fontSize:'11px',color:'#6f8ca5'}}>Integrated training workspace</span></div><div style={{display:'flex',gap:'8px'}}><a href={TYPING_TOOL_URL} target="_blank" rel="noreferrer" style={{padding:'7px 10px',border:'1px solid #315878',borderRadius:'7px',color:'#bfe9ff',textDecoration:'none',fontSize:'11px'}}>Open Full Screen ↗</a><button onClick={() => setShowTypingTool(false)} style={{padding:'7px 11px',background:'#35121d',border:'1px solid #8f3d4b',borderRadius:'7px',color:'#ffd8e1'}}>Close</button></div></div><iframe title="Leo Typing Tool" src={TYPING_TOOL_URL} style={{width:'100%',height:'100%',border:0,background:'#07111c'}} allow="clipboard-read; clipboard-write" /></div></div>}
