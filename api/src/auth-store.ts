@@ -60,3 +60,10 @@ export async function persistSecurityLog(event:{result:string,username?:string,d
     ]);
   }catch(e){ console.error('DB security log write failed',e); }
 }
+
+/** Verify the database actually responds; a configured URL alone is not proof of connectivity. */
+export async function databaseHealth():Promise<{configured:boolean;connected:boolean}>{
+  if(!pool) return {configured:false,connected:false};
+  try { await pool.query('SELECT 1'); return {configured:true,connected:true}; }
+  catch { return {configured:true,connected:false}; }
+}
