@@ -1,0 +1,32 @@
+name: Database readiness tests
+on:
+  push:
+    branches: [fix/database-consistency-readiness]
+  pull_request:
+    paths: ['api/**', '.github/workflows/database-readiness.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: npm run build -w api
+      - name: Verify health endpoint is authenticated and read-only
+        run: |
+          set -euo pipefail
+          export PORT=4651
+          export ADMIN_PASSWORD="test-only-password"
+          node api/dist/index.js >/tmp/health-api.log 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4651/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          code=$(curl -s -o /tmp/db-health.json -w '%{http_code}' http://127.0.0.1:4651/api/database/health)
+          test "$code" = 401 || { cat /tmp/db-health.json; exit 1; }
+          grep -q "Authentication required" /tmp/db-health.json
+          grep -q "SELECT 1" api/src/auth-store.ts
+          echo "Protected database health route and read-only SQL check passed."
