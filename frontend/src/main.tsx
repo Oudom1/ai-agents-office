@@ -491,27 +491,43 @@ function App() {
 
       <main>
         <section className="office-card">
-          <div className="office">
-            <Room x={3} y={4} w={20} h={25} title="MANAGER OFFICE" cls="manager-room" />
-            <Room x={25} y={4} w={22} h={25} title="TASK BOARD" cls="task-room" />
-            <Room x={49} y={4} w={22} h={25} title="ACTIVE TASKS" cls="active-room" />
-            <Room x={73} y={4} w={24} h={25} title={`BLOCKERS (${blockers.length})`} cls="active-room" />
-            <Room x={3} y={33} w={94} h={34} title="OPERATIONS FLOOR" cls="ops-room" />
-            <Room x={3} y={70} w={44} h={25} title="LOUNGE / BREAK • SNACKS" cls="lounge-room" />
-            <Room x={50} y={70} w={47} h={25} title="CAFETERIA / LUNCH • FOOD" cls="cafe-room" />
-
-            <Desk x={12} y={16} /><Desk x={17} y={42} /><Desk x={39} y={42} /><Desk x={62} y={42} /><Desk x={25} y={57} /><Desk x={49} y={57} /><Desk x={73} y={57} />
-            <div style={{position:'absolute',left:'74.5%',top:'9%',width:'20.5%',height:'16%',zIndex:2,overflow:'hidden',fontSize:'8px',color:'#ffbec7'}}>
-              {blockers.length === 0 ? <span style={{color:'#7890a7'}}>No blockers reported</span> : blockers.slice(0,3).map(t => <div key={t.id} style={{marginBottom:'5px',padding:'4px 5px',border:'1px solid #6d3440',borderRadius:'5px',background:'#331923cc'}}><b>{agents.find(a=>a.id===t.agentId)?.name}</b> — {t.blocker}</div>)}
+          <div className="office office-v2">
+            <div className="office-top">
+              <div className="office-v2-panel office-manager">
+                <h3>♛ MANAGER OFFICE</h3>
+                <p>Assign tasks, review progress, and resolve blockers.</p>
+                <div className="manager-avatar">👨‍💼</div>
+                <b>Alex · Manager</b>
+                <span className="office-live">● Available to coordinate</span>
+              </div>
+              <div className="office-v2-panel office-board">
+                <div className="office-section-title"><h3>▤ TASK BOARD</h3><span>{activeTasks.length} unfinished</span></div>
+                <p>Assignments across your AI agent team</p>
+                <div className="office-kanban">
+                  <div><b>TO DO</b><strong>{activeTasks.filter(t=>t.phase==='queued'||(!t.phase&&t.status==='active')).length}</strong></div>
+                  <div><b>IN PROGRESS</b><strong>{activeTasks.filter(t=>t.phase==='working'||t.phase==='generating').length}</strong></div>
+                  <div><b>BLOCKED</b><strong>{blockers.length}</strong></div>
+                  <div><b>COMPLETED</b><strong>{doneTasks.length}</strong></div>
+                </div>
+                <div className="office-task-preview">{activeTasks.slice(0,3).map(t=><div key={t.id}><span>{agents.find(a=>a.id===t.agentId)?.name||'Agent'}</span>{t.title}</div>)}{!activeTasks.length&&<p>No pending assignments</p>}</div>
+              </div>
             </div>
-
-            <div className="sofa" style={{left: '11%', top: '79%'}}>▰▰</div>
-            <div className="coffee" style={{left: '29%', top: '80%'}}>☕</div>
-            <div className="snack-food" style={{left: '37%', top: '80%'}}>🍪 🍎 🥤</div>
-            <div className="table" style={{left: '67%', top: '80%'}}>▭</div>
-            <div className="lunch-food" style={{left: '77%', top: '79%'}}>🍜 🍱 🥗</div>
-            <div className="coffee" style={{left: '91%', top: '82%'}}>☕</div>
-            {agents.map(a => <AgentSprite key={a.id} agent={a} completed={completedByAgent[a.id] ?? 0} />)}
+            <div className="office-v2-panel office-operations">
+              <div className="office-section-title"><h3>♧ OPERATIONS FLOOR</h3><span>{workerAgents.length} specialist agents</span></div>
+              <p>Agent workstations, current activity, and progress</p>
+              <div className="office-agent-grid">
+                {workerAgents.map(a=><div className="office-agent-tile" key={a.id}>
+                  <div className="office-agent-portrait">{({sysadmin:'🧑‍💻',security:'👩‍💻',cloud:'👨‍🔧',qa:'👩‍🔬',implement:'🧑‍🔧',developer:'👨‍💻'} as Record<string,string>)[a.id]||'🤖'}</div>
+                  <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
+                  <MiniProgress completed={completedByAgent[a.id]??0}/>
+                  {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}
+                </div>)}
+              </div>
+            </div>
+            <div className="office-bottom">
+              <div className="office-v2-panel office-lounge"><h3>☕ LOUNGE / BREAK · SNACKS</h3><p>Recharge, relax and share ideas.</p><div className="office-lounge-art">🛋️ <span>☕ 🍪 🍎 🥤</span></div></div>
+              <div className="office-v2-panel office-cafeteria"><h3>♨ CAFETERIA / LUNCH · FOOD</h3><p>Lunch break and refreshments.</p><div className="office-lounge-art">🍽️ <span>🍜 🍱 🥗 ☕</span></div></div>
+            </div>
           </div>
         </section>
 
