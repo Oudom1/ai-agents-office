@@ -302,6 +302,12 @@ async function importFile(file){
  }
  // Override Date Locked user with the latest actual administrator/account lock event
  // from the change-document sheet (Modification date), when available.
+ // Clear non-audit fallback values first. Only Administrator Lock events below
+ // may populate Reason for User Lock and Date Locked user.
+ for(const p of profiles.values()){
+   p.lockReason='';
+   p.passwordLockDate='';
+ }
  for(const [key,event] of lockEvents.entries()){
    const p=profiles.get(key);
    if(p){
@@ -338,7 +344,9 @@ async function importFile(file){
    const lockEvent=lockEvents.get(key);
    return {
      ...r,
-     lockReason:lockEvent?.text||profile?.lockReason||'',
+     // Only an actual Administrator Lock event in the raw change-document table
+     // is allowed to populate these two audit export fields.
+     lockReason:lockEvent?.text||'',
      passwordLockDate:lockEvent?.date||'',
      createdDate:profile?.createdDate||r.createdDate||'',
      userType:profile?.userType||''
