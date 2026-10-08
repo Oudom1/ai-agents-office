@@ -125,7 +125,7 @@ function tcodeFrom(row){return findVal(row,['T-code','Tcode','Transaction Code',
 function roleFrom(row){return findVal(row,['Role','Role Name','SAP Role','Composite Role'])}
 function usernameFrom(row){return findVal(row,['User name','Username','User ID','User','SAP User','SAP Username','Account'])}
 function fullnameFrom(row){return findVal(row,['Full Name','Name','User Full Name','Display Name'])}
-function userTypeFrom(row){return findVal(row,['User Type','Type','User type'])}
+function userTypeFrom(row){return findVal(row,['User Type','User type'])}
 function validFromFrom(row){return dateValue(findVal(row,['Valid From','Validity From','From Date','Start date','Start Date']))}
 function validToFrom(row){return dateValue(findVal(row,['Valid To','Validity To','To Date','Valid until','End date','End Date']))}
 function lockFrom(row){return findVal(row,['Locked','Lock status','User Lock','Lock','Account Lock'])}
@@ -205,7 +205,7 @@ function aggregate(records,append=false){
   if(!u){u={id:crypto.randomUUID(),username:r.username,fullName:r.fullName||'',department:r.department||'',postTcodes:[],parkTcodes:[],otherTcodes:[],roles:[],lockRaw:r.lockRaw||'',lockReason:r.lockReason||'',createdDate:r.createdDate||'',passwordLockDate:r.passwordLockDate||'',validFrom:r.validFrom||'',validTo:r.validTo||'',userType:r.userType||'',reviewStatus:'New',owner:'Sam - System Admin',sourceRows:[]};map.set(k,u)}
   if(!u.fullName&&r.fullName)u.fullName=r.fullName;if(!u.department&&r.department)u.department=r.department;if(!u.userType&&r.userType)u.userType=r.userType;
   if(r.lockRaw)u.lockRaw=r.lockRaw;if(r.lockReason)u.lockReason=r.lockReason;
-  if(r.createdDate)u.createdDate=r.createdDate;if(r.passwordLockDate)u.passwordLockDate=r.passwordLockDate;
+  if(r.createdDate)u.createdDate=r.createdDate;if(r.passwordLockDate)u.passwordLockDate=r.passwordLockDate;if(r.userType)u.userType=r.userType;
   if(!u.validFrom&&r.validFrom)u.validFrom=r.validFrom;if(r.validTo)u.validTo=r.validTo;
   if(r.role&&!u.roles.includes(r.role))u.roles.push(r.role);
   if(r.access==='Post'&&r.tcode&&!u.postTcodes.includes(r.tcode))u.postTcodes.push(r.tcode);
@@ -255,12 +255,8 @@ async function importFile(file){
  const newValueFrom=row=>findVal(row,['New Value']);
  const newValueTextFrom=row=>findVal(row,['Text for the New Value','New Value Text']);
  const lockEventIsLocked=row=>{
-   const nv=clean(newValueFrom(row)).toLowerCase();
    const nt=clean(newValueTextFrom(row)).toLowerCase();
-   const n=Number(nv);
-   if(nt.includes('not locked')||nt.includes('unlock'))return false;
-   if(nt.includes('administrator lock')||nt.includes('locked'))return true;
-   return Number.isFinite(n)&&n!==0;
+   return nt==='administrator lock'||nt.includes('administrator lock');
  };
  const addLockEvent=(row,sheetName)=>{
    const user=auditUserFrom(row), change=clean(changeTypeFrom(row)).toLowerCase(), mod=modificationDateFrom(row);
@@ -319,7 +315,17 @@ async function importFile(file){
      joined.push({...p,access:'',tcode:'',role:'',sourceSheet:'User profile'});
    }
  }
- return {records:[...direct,...joined].filter(Boolean),sheetCount:parsed.length,roleMappings:roleTcodes.size,assignments:assignments.length,lockEvents:lockEvents.size};
+ const finalRecords=[...direct,...joined].filter(Boolean).map(r=>{
+   const key=r.username.toLowerCase();
+   const profile=profiles.get(key);
+   const lockEvent=lockEvents.get(key);
+   return {
+     ...r,
+     passwordLockDate:lockEvent?.date||'',
+     userType:profile?.userType||''
+   };
+ });
+ return {records:finalRecords,sheetCount:parsed.length,roleMappings:roleTcodes.size,assignments:assignments.length,lockEvents:lockEvents.size};
 }
 function filtered(){
  const q=$('search').value.toLowerCase(),rf=$('riskFilter').value,af=$('accessFilter').value,sf=$('stateFilter').value;
