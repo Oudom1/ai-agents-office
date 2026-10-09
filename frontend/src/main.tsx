@@ -456,6 +456,19 @@ function App() {
     try {
       // One atomic server-side operation prevents partial deletions and refresh races.
       const response = await authFetch(`${API}/tasks/completed?expectedCount=${completed.length}`, {method:'DELETE'});
+      if (response.status === 404) {
+        // Compatibility with older Render API until the bulk route is deployed.
+        const outcomes = await Promise.allSettled(completed.map(async task => {
+          const result = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}`, {method:'DELETE'});
+          if (!result.ok && result.status !== 404) throw new Error(`HTTP ${result.status}`);
+          return task.id;
+        }));
+        const cleared = new Set(outcomes.filter((x): x is PromiseFulfilledResult<string> => x.status === 'fulfilled').map(x => x.value));
+        setTasks(prev => prev.filter(t => !cleared.has(t.id)));
+        if (cleared.size !== completed.length) throw new Error(`Removed ${cleared.size} of ${completed.length}; retry remaining after refresh`);
+        setNotice(`Removed ${cleared.size} completed records; active tasks preserved.`);
+        return;
+      }
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(detail.error || `HTTP ${response.status}`);
