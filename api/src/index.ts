@@ -615,6 +615,16 @@ app.patch('/api/tasks/:id/done', requireAuth, (req,res)=>{
   res.json(task);
 });
 
+// Bulk-delete completed history only. Expected count avoids accidental stale-tab deletion.
+app.delete('/api/tasks/completed', requireAuth, (req,res)=>{
+  const expected=Number(req.query.expectedCount);
+  if(!Number.isSafeInteger(expected)||expected<0)return res.status(400).json({error:'Valid expectedCount is required'});
+  const actual=tasks.filter(t=>t.status==='done').length;
+  if(actual!==expected)return res.status(409).json({error:`Completed count changed (now ${actual}). Refresh before clearing.`,actualCount:actual});
+  for(let i=tasks.length-1;i>=0;i--)if(tasks[i].status==='done')tasks.splice(i,1);
+  return res.json({ok:true,removedCount:actual,activePreserved:tasks.length});
+});
+
 app.delete('/api/tasks/:id', requireAuth, (req,res)=>{
   const index=tasks.findIndex(t=>t.id===req.params.id);
   if(index<0) return res.status(404).json({error:'Task not found'});
