@@ -160,12 +160,13 @@ function App() {
         const data = await a.json();
         if (Array.isArray(data) && data.length) {
           const hasLeo = data.some((x: Agent) => x.id === 'developer');
-          setAgents(hasLeo ? data : [...data, fallbackAgents.find(x => x.id === 'developer')!]);
+          const incoming=hasLeo ? data : [...data, fallbackAgents.find(x => x.id === 'developer')!];
+          setAgents(prev => JSON.stringify(prev)===JSON.stringify(incoming) ? prev : incoming);
         }
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data)) setTasks(data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)));
+        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => JSON.stringify(prev)===JSON.stringify(incoming) ? prev : incoming); }
       }
     } catch {}
   };
@@ -430,12 +431,8 @@ function App() {
     setNotice(blocker ? `${name} raised a blocker to Alex` : `${name} blocker cleared`);
   };
 
-  useEffect(() => {
-    // Automatic completion should not churn through seeded demo work on every clock tick.
-    if (tasks.length > 30) return;
-    const dueTask = tasks.find(t => t.status !== 'done' && t.phase === 'working' && !t.blocker && getRemainingSeconds(t, now) <= 0);
-    if (dueTask) completeTask(dueTask, true);
-  }, [tasks, now]);
+  // Deliberately do not mark assigned work complete merely because a browser timer expires.
+  // Completion must be triggered by a real user or a confirmed provider result.
 
   useEffect(() => {
     if (!KAI_FREE_VIDEO_AVAILABLE) return;
@@ -455,27 +452,35 @@ function App() {
     setNotice('Alex refreshed Kai’s video task — new 4-hour cycle started');
   }, [tasks, now]);
 
-  const clearDone = async () => {
+  const clearDone = () => {
     const completed=tasks.filter(t=>t.status==='done');
-    if(!completed.length || clearingCompleted)return;
-    if(!window.confirm(`Clear ${completed.length} completed results from this dashboard? We will also attempt server deletion.`))return;
-    setClearingCompleted(true);
-    // Persist the cleared IDs before updating React state, so the next API poll cannot resurrect results.
-    markCleared(completed.map(t=>t.id));
+    if (!completed.length || clearingCompleted) return;
+    if (!window.confirm(`Clear ${completed.length} completed results from this browser? Server deletion will be attempted separately.`)) return;
+    const ids=completed.map(t=>t.id);
+    // Clear immediately without waiting on a sleeping Render service.
+    markCleared(ids);
     setTasks(prev=>prev.filter(t=>t.status!=='done'));
-    try {
-      const bulk=await authFetch(`${API}/tasks/completed?expectedCount=${completed.length}`,{method:'DELETE'});
-      if(bulk.ok){setNotice(`Cleared ${completed.length} results from dashboard and server.`);return;}
-      // Older API deployments have no bulk route: use the existing per-task delete endpoint.
-      const outcomes=await Promise.allSettled(completed.map(async t=>{
-        const res=await authFetch(`${API}/tasks/${encodeURIComponent(t.id)}`,{method:'DELETE'});
-        if(!res.ok)throw new Error(`HTTP ${res.status}`);
-      }));
-      const succeeded=outcomes.filter(r=>r.status==='fulfilled').length;
-      setNotice(`Cleared ${completed.length} from this browser; ${succeeded} confirmed removed on server.`);
-    }catch{
-      setNotice(`Cleared ${completed.length} from this browser. Server cleanup is still pending.`);
-    }finally{setClearingCompleted(false);}
+    try { const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); if(Array.isArray(saved))localStorage.setItem(STORAGE_KEY,JSON.stringify(saved.filter((t:Task)=>!ids.includes(t.id)))); }catch{}
+    setNotice(`Cleared ${ids.length} completed results locally. Server cleanup is not confirmed.`);
+    // Best-effort server cleanup, never block the browser on external API requests.
+    void (async()=>{
+      try {
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),5000);
+        let resp:Response;
+        try { resp=await authFetch(`${API}/tasks/completed?expectedCount=${ids.length}`,{method:'DELETE',signal:controller.signal}); }
+        finally { clearTimeout(timeout); }
+        if(resp.ok){setNotice(`Cleared ${ids.length} completed results on dashboard and server.`);return;}
+        // On older deployments, perform individual deletes without blocking UI.
+        let deleted=0;
+        for(const id of ids){
+          const c=new AbortController();const timer=setTimeout(()=>c.abort(),3000);
+          try {const r=await authFetch(`${API}/tasks/${encodeURIComponent(id)}`,{method:'DELETE',signal:c.signal});if(r.ok)deleted++;}catch{}
+          finally{clearTimeout(timer);}
+        }
+        setNotice(`Cleared from dashboard; server confirmed ${deleted} of ${ids.length} deletions.`);
+      }catch{setNotice('Results cleared locally. Server cleanup remains unconfirmed.');}
+    })();
   };
   const workerAgents = useMemo(() => agents.filter(a => a.id !== 'manager'), [agents]);
   const completedByAgent = useMemo(() => Object.fromEntries(agents.map(a => [a.id, Math.min(TASK_TARGET, tasks.filter(t => t.agentId === a.id && t.status.toLowerCase() === 'done').length)])), [agents, tasks]);
