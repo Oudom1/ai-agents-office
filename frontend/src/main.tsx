@@ -451,20 +451,23 @@ function App() {
   const clearDone = async () => {
     const completed = tasks.filter(t => t.status === 'done');
     if (!completed.length || clearingCompleted) return;
-    if (!window.confirm(`Clear ${completed.length} completed results? Active tasks will be kept.`)) return;
+    if (!window.confirm(`Permanently remove ${completed.length} completed results? Active tasks will be preserved.`)) return;
     setClearingCompleted(true);
     try {
-      const results = await Promise.allSettled(completed.map(async task => {
-        const r = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}`, {method:'DELETE'});
-        if (!r.ok && r.status !== 404) throw new Error(`HTTP ${r.status}`);
-        return task.id;
-      }));
-      const cleared = new Set(results.filter((r):r is PromiseFulfilledResult<string> => r.status === 'fulfilled').map(r=>r.value));
-      if (cleared.size) setTasks(prev => prev.filter(t => !cleared.has(t.id)));
-      setNotice(results.some(r=>r.status==='rejected')
-        ? `Cleared ${cleared.size} results; some could not be removed.`
-        : `Cleared ${cleared.size} completed results.`);
-    } finally {setClearingCompleted(false);}
+      // One atomic server-side operation prevents partial deletions and refresh races.
+      const response = await authFetch(`${API}/tasks/completed?expectedCount=${completed.length}`, {method:'DELETE'});
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || `HTTP ${response.status}`);
+      }
+      const result = await response.json();
+      setTasks(prev => prev.filter(t => t.status !== 'done'));
+      setNotice(`Removed ${result.removedCount} completed records; active tasks preserved.`);
+    } catch (error) {
+      setNotice(`Could not clear completed results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setClearingCompleted(false);
+    }
   };
   const workerAgents = useMemo(() => agents.filter(a => a.id !== 'manager'), [agents]);
   const completedByAgent = useMemo(() => Object.fromEntries(agents.map(a => [a.id, Math.min(TASK_TARGET, tasks.filter(t => t.agentId === a.id && t.status.toLowerCase() === 'done').length)])), [agents, tasks]);
