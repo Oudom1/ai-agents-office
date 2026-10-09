@@ -49,6 +49,10 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 }
 const TASK_TARGET = 12;
 const STORAGE_KEY = 'ai-agents-office-tasks-v3';
+const CLEARED_RESULTS_KEY = 'ai-agents-office-cleared-results-v1';
+function clearedIds(): Set<string> { try { const value=JSON.parse(localStorage.getItem(CLEARED_RESULTS_KEY)||'[]'); return new Set(Array.isArray(value)?value:[]); } catch { return new Set(); } }
+function markCleared(ids:string[]) { const all=clearedIds(); ids.forEach(id=>all.add(id)); try { localStorage.setItem(CLEARED_RESULTS_KEY,JSON.stringify([...all].slice(-2000))); } catch {} }
+
 const GOOGLE_DRIVE_PLACEHOLDER = 'https://drive.google.com/drive/folders/1SDKs0stvoeIkYIhEcP5znRq7-tSyaEpl';
 const KAI_REFRESH_HOURS = 4;
 const KAI_REFRESH_MS = KAI_REFRESH_HOURS * 60 * 60 * 1000;
@@ -124,7 +128,7 @@ function normalizeKaiTask(t: Task): Task {
 function loadLocalTasks(): Task[] {
   try {
     const parsed: Task[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return parsed.map(normalizeKaiTask);
+    return parsed.filter(t=>!clearedIds().has(t.id)).map(normalizeKaiTask);
   } catch { return []; }
 }
 
@@ -160,7 +164,7 @@ function App() {
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data)) setTasks(data.map((t: Task) => normalizeKaiTask(t)));
+        if (Array.isArray(data)) setTasks(data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)));
       }
     } catch {}
   };
@@ -449,38 +453,26 @@ function App() {
   }, [tasks, now]);
 
   const clearDone = async () => {
-    const completed = tasks.filter(t => t.status === 'done');
-    if (!completed.length || clearingCompleted) return;
-    if (!window.confirm(`Permanently remove ${completed.length} completed results? Active tasks will be preserved.`)) return;
+    const completed=tasks.filter(t=>t.status==='done');
+    if(!completed.length || clearingCompleted)return;
+    if(!window.confirm(`Clear ${completed.length} completed results from this dashboard? We will also attempt server deletion.`))return;
     setClearingCompleted(true);
+    // Persist the cleared IDs before updating React state, so the next API poll cannot resurrect results.
+    markCleared(completed.map(t=>t.id));
+    setTasks(prev=>prev.filter(t=>t.status!=='done'));
     try {
-      // One atomic server-side operation prevents partial deletions and refresh races.
-      const response = await authFetch(`${API}/tasks/completed?expectedCount=${completed.length}`, {method:'DELETE'});
-      if (response.status === 404) {
-        // Compatibility with older Render API until the bulk route is deployed.
-        const outcomes = await Promise.allSettled(completed.map(async task => {
-          const result = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}`, {method:'DELETE'});
-          if (!result.ok && result.status !== 404) throw new Error(`HTTP ${result.status}`);
-          return task.id;
-        }));
-        const cleared = new Set(outcomes.filter((x): x is PromiseFulfilledResult<string> => x.status === 'fulfilled').map(x => x.value));
-        setTasks(prev => prev.filter(t => !cleared.has(t.id)));
-        if (cleared.size !== completed.length) throw new Error(`Removed ${cleared.size} of ${completed.length}; retry remaining after refresh`);
-        setNotice(`Removed ${cleared.size} completed records; active tasks preserved.`);
-        return;
-      }
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
-        throw new Error(detail.error || `HTTP ${response.status}`);
-      }
-      const result = await response.json();
-      setTasks(prev => prev.filter(t => t.status !== 'done'));
-      setNotice(`Removed ${result.removedCount} completed records; active tasks preserved.`);
-    } catch (error) {
-      setNotice(`Could not clear completed results: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setClearingCompleted(false);
-    }
+      const bulk=await authFetch(`${API}/tasks/completed?expectedCount=${completed.length}`,{method:'DELETE'});
+      if(bulk.ok){setNotice(`Cleared ${completed.length} results from dashboard and server.`);return;}
+      // Older API deployments have no bulk route: use the existing per-task delete endpoint.
+      const outcomes=await Promise.allSettled(completed.map(async t=>{
+        const res=await authFetch(`${API}/tasks/${encodeURIComponent(t.id)}`,{method:'DELETE'});
+        if(!res.ok)throw new Error(`HTTP ${res.status}`);
+      }));
+      const succeeded=outcomes.filter(r=>r.status==='fulfilled').length;
+      setNotice(`Cleared ${completed.length} from this browser; ${succeeded} confirmed removed on server.`);
+    }catch{
+      setNotice(`Cleared ${completed.length} from this browser. Server cleanup is still pending.`);
+    }finally{setClearingCompleted(false);}
   };
   const workerAgents = useMemo(() => agents.filter(a => a.id !== 'manager'), [agents]);
   const completedByAgent = useMemo(() => Object.fromEntries(agents.map(a => [a.id, Math.min(TASK_TARGET, tasks.filter(t => t.agentId === a.id && t.status.toLowerCase() === 'done').length)])), [agents, tasks]);
