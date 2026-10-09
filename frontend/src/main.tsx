@@ -491,37 +491,41 @@ function App() {
 
       <main>
         <section className="office-card">
-          <div className="office office-v2">
+          <div className="office office-v2 office-v3">
+            <div className="office-v3-head"><div><span className="office-eyebrow">◈ AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished</div></div>
+            <div className="office-workflow">{[
+              ['01','Assignment','manager'],['02','Development','developer'],['03','Verify & Fix','implement'],['04','Testing','qa'],['05','Support','manager'],['06','Deployment','cloud'],['07','Security','security'],['08','Live System','sysadmin']
+            ].map(([number,title,id],i)=><button type="button" key={number} className={`office-flow-step flow-step-${i}`} onClick={()=>setSelected(id)} title={`Focus ${title}`}><span>{number}</span><b>{title}</b></button>)}</div>
             <div className="office-top">
-              <div className="office-v2-panel office-manager">
+              <div className="office-v2-panel office-manager office-v3-manager">
                 <h3>♛ MANAGER OFFICE</h3>
                 <p>Assign tasks, review progress, and resolve blockers.</p>
-                <div className="manager-avatar">👨‍💼</div>
+                <div className="manager-avatar office-v3-avatar">👨‍💼</div><div className="manager-beam" aria-hidden="true" />
                 <b>Alex · Manager</b>
                 <span className="office-live">● Available to coordinate</span>
               </div>
               <div className="office-v2-panel office-board">
                 <div className="office-section-title"><h3>▤ TASK BOARD</h3><span>{activeTasks.length} unfinished</span></div>
                 <p>Assignments across your AI agent team</p>
-                <div className="office-kanban">
+                <div className="office-kanban office-v3-kanban">
                   <div><b>TO DO</b><strong>{activeTasks.filter(t=>t.phase==='queued'||(!t.phase&&t.status==='active')).length}</strong></div>
                   <div><b>IN PROGRESS</b><strong>{activeTasks.filter(t=>t.phase==='working'||t.phase==='generating').length}</strong></div>
                   <div><b>BLOCKED</b><strong>{blockers.length}</strong></div>
                   <div><b>COMPLETED</b><strong>{doneTasks.length}</strong></div>
                 </div>
-                <div className="office-task-preview">{activeTasks.slice(0,3).map(t=><div key={t.id}><span>{agents.find(a=>a.id===t.agentId)?.name||'Agent'}</span>{t.title}</div>)}{!activeTasks.length&&<p>No pending assignments</p>}</div>
+                <div className="office-task-preview office-v3-preview">{activeTasks.slice(0,3).map(t=><div key={t.id}><span>{agents.find(a=>a.id===t.agentId)?.name||'Agent'}</span>{t.title}</div>)}{!activeTasks.length&&<p>No pending assignments</p>}</div>
               </div>
             </div>
             <div className="office-v2-panel office-operations">
               <div className="office-section-title"><h3>♧ OPERATIONS FLOOR</h3><span>{workerAgents.length} specialist agents</span></div>
-              <p>Agent workstations, current activity, and progress</p>
-              <div className="office-agent-grid">
-                {workerAgents.map(a=><div className="office-agent-tile" key={a.id}>
+              <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
+              <div className="office-agent-grid office-v3-team">
+                {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
                   <div className="office-agent-portrait">{({sysadmin:'🧑‍💻',security:'👩‍💻',cloud:'👨‍🔧',qa:'👩‍🔬',implement:'🧑‍🔧',developer:'👨‍💻'} as Record<string,string>)[a.id]||'🤖'}</div>
                   <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
                   <MiniProgress completed={completedByAgent[a.id]??0}/>
                   {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}
-                </div>)}
+                </button>)}
               </div>
             </div>
             <div className="office-bottom">
