@@ -116,3 +116,20 @@
 .office-v3 .illustrated-manager .manager-desk{font-size:23px;position:absolute;margin-top:88px;margin-left:75px}
 @media(max-width:640px){.office-v3 .office-v3-agent{grid-template-columns:86px 1fr;min-height:125px}.office-v3 .office-v3-agent .office-role-avatar{width:79px!important;height:88px!important}.office-v3 .illustrated-agent-face{font-size:45px}.office-v3 .office-v3-agent .office-agent-detail b{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.office-v3 .office-v3-agent,.office-v3 .illustrated-agent-face{animation:none!important;transition:none!important}}
+
+/* Graphic office dashboard: illustrated characters live inside role-specific workstations. */
+.office-v3 .office-v3-head{position:relative;padding:15px 18px;background:linear-gradient(90deg,#081632d9,#10143c75);border-radius:14px}
+.office-v3 .office-v3-head:before{content:'🏢';position:absolute;right:275px;top:4px;font-size:54px;opacity:.34;pointer-events:none}
+.office-v3 .office-task-summary{gap:12px;margin:15px 0}
+.office-v3 .office-summary-card{border-radius:14px;min-height:88px;box-shadow:inset 0 0 20px #269aff29,0 0 12px #286ef631}
+.office-v3 .office-v3-agent .office-role-avatar{width:115px!important;height:119px!important;padding:0!important;border:1px solid var(--agent-border,#45acff)!important;overflow:hidden!important}
+.office-v3 .office-v3-agent{grid-template-columns:124px 1fr;min-height:153px!important;padding:11px!important}
+.office-v3 .office-v3-agent .illustrated-portrait-svg{width:100%;height:100%;display:block;object-fit:cover;filter:drop-shadow(0 1px 5px #0008)}
+.office-v3 .office-v3-agent:before{opacity:.3;font-size:48px}
+.office-v3 .illustrated-manager{padding:0!important;overflow:hidden;background:transparent!important;width:153px!important;height:147px!important}
+.office-v3 .illustrated-manager .illustrated-portrait-svg{width:100%;height:100%;display:block}
+.office-v3 .office-manager.office-v3-manager{border-color:#18b4ff!important;box-shadow:inset 0 0 30px #074a963a}
+.office-v3 .office-manager.office-v3-manager:after{content:'🪴  🖥️';right:15px;bottom:20px}
+.office-v3 .office-lounge{background:linear-gradient(100deg,#151e51,#572954)!important;border-color:#a774ff!important}
+.office-v3 .office-cafeteria{background:linear-gradient(100deg,#151e51,#764a23)!important;border-color:#ffbd4e!important}
+@media(max-width:650px){.office-v3 .office-v3-agent{grid-template-columns:86px 1fr;min-height:112px!important}.office-v3 .office-v3-agent .office-role-avatar{width:81px!important;height:90px!important}.office-v3 .office-v3-head:before{display:none}}
