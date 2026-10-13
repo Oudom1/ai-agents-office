@@ -74,3 +74,17 @@
 .office-v3 .avatar-sysadmin{background:linear-gradient(145deg,#1b7c77,#123e49);border-color:#66f5d1}
 .office-v3 .office-flow-step,.office-v3 .office-v3-agent,.office-v3 .office-v3-online i{animation:none!important}
 .office-reload{display:inline-block;width:auto;margin:0 0 0 12px;padding:6px 9px;font-size:11px;border-radius:8px;background:#134272;border:1px solid #389ed0}
+
+/* Task summary replaces decorative workflow ribbon */
+.office-task-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:2px 0 10px}
+.office-summary-card{display:flex;align-items:center;gap:17px;min-width:0;padding:16px 19px;border:1px solid #296de6;border-radius:13px;background:linear-gradient(115deg,#092654,#071534);box-shadow:inset 0 1px #ffffff20,0 0 18px #123de333;color:#eafbff}
+.office-summary-card.pending{border-color:#9b36ff;background:linear-gradient(115deg,#6a1ccf,#36059a);box-shadow:0 0 20px #a02dff35}
+.office-summary-card.progress{border-color:#596afc;background:linear-gradient(115deg,#162969,#10134c)}
+.office-summary-card.blocked{border-color:#df357d;background:linear-gradient(115deg,#371638,#180f30)}
+.office-summary-card .summary-icon{font-size:29px;color:#57e9ff;text-shadow:0 0 12px #1dafff}
+.office-summary-card.blocked .summary-icon{color:#ff6390}
+.office-summary-card>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.office-summary-card>div>span{font-weight:700;font-size:13px;color:#cbeaff}
+.office-summary-card strong{font-size:31px;line-height:1;font-variant-numeric:tabular-nums;color:white}
+@media(max-width:800px){.office-task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.office-summary-card{padding:12px}}
+@media(max-width:460px){.office-summary-card{gap:9px}.office-summary-card .summary-icon{font-size:20px}.office-summary-card strong{font-size:24px}}
