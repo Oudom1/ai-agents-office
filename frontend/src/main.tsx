@@ -46,7 +46,7 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
   if (token) headers.set('Authorization', 'Bearer ' + token);
-  return fetch(input, {...init, headers});
+  return fetch(input, {...init, headers, cache: 'no-store'});
 }
 const TASK_TARGET = 12;
 const STORAGE_KEY = 'ai-agents-office-tasks-v3';
