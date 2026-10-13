@@ -282,3 +282,10 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 /* QA fix: pull sprite back to show full head and surrounding desk, not a clipped face */
 .office-approved .anime-portrait img{width:960px!important}
 .office-approved .office-v3-agent .anime-portrait{background:#0b2452!important}
+
+/* Seven separate artwork files: fit each full face without sprite offsets */
+.office-approved .anime-portrait{display:block!important;overflow:hidden!important;position:relative!important}
+.office-approved .anime-portrait img{position:static!important;width:100%!important;height:100%!important;max-width:100%!important;object-fit:contain!important;object-position:center center!important;display:block!important;transform:none!important}
+.office-approved .office-v3-agent .anime-portrait{width:122px!important;height:130px!important}
+.office-approved .illustrated-manager .anime-portrait{width:150px!important;height:144px!important}
+@media(max-width:760px){.office-approved .office-v3-agent .anime-portrait{width:100px!important;height:120px!important}}
