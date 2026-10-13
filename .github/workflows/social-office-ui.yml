@@ -10,5 +10,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
-      - run: npm run build -w frontend
+      - run: cd frontend && npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: cd frontend && npm run build
