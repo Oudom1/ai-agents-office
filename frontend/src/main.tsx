@@ -522,7 +522,7 @@ function App() {
               <div className="office-v2-panel office-manager office-v3-manager">
                 <h3>♛ MANAGER OFFICE</h3>
                 <p>Assign tasks, review progress, and resolve blockers.</p>
-                <div className="manager-avatar office-v3-avatar">👨‍💼</div><div className="manager-beam" aria-hidden="true" />
+                <div className="manager-avatar office-v3-avatar illustrated-manager"><span className="manager-face" aria-hidden="true">🧑🏻‍💼</span><span className="manager-desk">💻</span></div><div className="manager-beam" aria-hidden="true" />
                 <b>Alex · Manager</b>
                 <span className="office-live">● Available to coordinate</span>
               </div>
@@ -543,7 +543,7 @@ function App() {
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
               <div className="office-agent-grid office-v3-team">
                 {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
-                  <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><span className="avatar-initial">{a.name.slice(0,1)}</span></div>
+                  <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><span className="illustrated-agent-face">{({sysadmin:"👨🏻‍💻",security:"👩🏻‍💻",cloud:"👨🏼‍🚀",qa:"👩🏽‍🔬",implement:"🧑🏼‍🔧",developer:"👨🏻‍💻"} as Record<string,string>)[a.id]||"🤖"}</span></div>
                   <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
                   <MiniProgress completed={completedByAgent[a.id]??0}/>
                   {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}
