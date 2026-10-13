@@ -634,6 +634,26 @@ app.delete('/api/tasks/:id', requireAuth, (req,res)=>{
   res.json({ok:true,removed});
 });
 
+// Explicit, authenticated cleanup of unfinished tasks. Completed results remain intact.
+app.delete('/api/tasks/active', requireAuth, (req,res)=>{
+  const pending=tasks.filter(t=>t.status!=='done');
+  const expected=Number(req.query.expectedCount);
+  if(!Number.isSafeInteger(expected)||expected<0){
+    return res.status(400).json({error:'expectedCount query parameter is required'});
+  }
+  if(pending.length!==expected){
+    return res.status(409).json({error:'Active task count has changed; nothing deleted',actualCount:pending.length});
+  }
+  const removed=new Set(pending.map(t=>t.id));
+  for(let i=tasks.length-1;i>=0;i--)if(removed.has(tasks[i].id))tasks.splice(i,1);
+  for(const agent of agents){
+    const hasPendingTask=pending.some(t=>t.agentId===agent.id);
+    if(hasPendingTask){delete (agent as any).currentTask;(agent as any).destination=agent.home;agent.state='working';}
+  }
+  addSecurityLog(req,'SUCCESS',req.auth?.user||'admin',`Cleared ${pending.length} unfinished tasks, preserved completed records`);
+  return res.json({ok:true,removedCount:pending.length,completedPreserved:tasks.filter(t=>t.status==='done').length});
+});
+
 app.delete('/api/tasks', requireAuth, (_req,res)=>{
   tasks.splice(0,tasks.length);
   agents.forEach(a=>{delete (a as any).currentTask;if(a.id!=='implement')a.state='working';});
