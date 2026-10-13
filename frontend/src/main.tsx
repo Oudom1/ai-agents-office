@@ -144,6 +144,30 @@ function bestAgentForTask(title: string) {
   return 'sysadmin';
 }
 
+// Only clear app-owned temporary caches once every 24 hours. Never delete
+// task history, completed results, authentication sessions or preferences.
+const DAILY_CACHE_KEY = 'ai-office-cache-cleaned-at-v1';
+const DAILY_CACHE_INTERVAL = 24 * 60 * 60 * 1000;
+async function cleanTemporaryOfficeCache(): Promise<void> {
+  try {
+    const now = Date.now();
+    const last = Number(localStorage.getItem(DAILY_CACHE_KEY) || 0);
+    if (Number.isFinite(last) && now - last < DAILY_CACHE_INTERVAL && last <= now) return;
+    if ('caches' in window) {
+      const cacheKeys = await window.caches.keys();
+      for (const key of cacheKeys) {
+        if (key.startsWith('ai-office-temp-')) {
+          await window.caches.delete(key);
+        }
+      }
+    }
+    // Save the last successful cleanup. Persistent task and login keys remain.
+    localStorage.setItem(DAILY_CACHE_KEY, String(now));
+  } catch {
+    // Cache cleanup must never prevent dashboard startup.
+  }
+}
+
 function App() {
   const [agents, setAgents] = useState<Agent[]>(fallbackAgents);
   const [tasks, setTasks] = useState<Task[]>(() => loadLocalTasks().slice(0,150));
@@ -155,6 +179,15 @@ function App() {
   const [showTypingTool, setShowTypingTool] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showSocialOffice, setShowSocialOffice] = useState(false);
+
+  useEffect(() => {
+    void cleanTemporaryOfficeCache();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void cleanTemporaryOfficeCache();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   const refresh = async () => {
     try {
