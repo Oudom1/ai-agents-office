@@ -512,9 +512,12 @@ function App() {
         <section className="office-card">
           <div className="office office-v2 office-v3">
             <div className="office-v3-head"><div><span className="office-eyebrow">◈ AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished <button type="button" className="office-reload" onClick={()=>void refresh()}>↻ Refresh</button></div></div>
-            <div className="office-workflow">{[
-              ['01','Assignment','manager'],['02','Development','developer'],['03','Verify & Fix','implement'],['04','Testing','qa'],['05','Support','manager'],['06','Deployment','cloud'],['07','Security','security'],['08','Live System','sysadmin']
-            ].map(([number,title,id],i)=><button type="button" key={number} className={`office-flow-step flow-step-${i}`} onClick={()=>setSelected(id)} title={`Focus ${title}`}><span>{number}</span><b>{title}</b></button>)}</div>
+            <div className="office-task-summary" aria-label="Task dashboard summary">
+              <div className="office-summary-card pending"><span className="summary-icon">▤</span><div><span>Pending Tasks</span><strong>{activeTasks.length}</strong></div></div>
+              <div className="office-summary-card todo"><span className="summary-icon">☷</span><div><span>To Do</span><strong>{activeTasks.filter(t=>!t.blocker && ['queued','active',undefined].includes(t.phase)).length}</strong></div></div>
+              <div className="office-summary-card progress"><span className="summary-icon">◉</span><div><span>In Progress</span><strong>{activeTasks.filter(t=>!t.blocker && !['queued','active',undefined].includes(t.phase)).length}</strong></div></div>
+              <div className="office-summary-card blocked"><span className="summary-icon">⚠</span><div><span>Blocked</span><strong>{activeTasks.filter(t=>!!t.blocker || t.status==='blocked').length}</strong></div></div>
+            </div>
             <div className="office-top">
               <div className="office-v2-panel office-manager office-v3-manager">
                 <h3>♛ MANAGER OFFICE</h3>
