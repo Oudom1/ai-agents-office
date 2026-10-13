@@ -179,6 +179,7 @@ function App() {
   const [showTypingTool, setShowTypingTool] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showSocialOffice, setShowSocialOffice] = useState(false);
+  const [progressLightsEnabled, setProgressLightsEnabled] = useState(true);
 
   useEffect(() => {
     void cleanTemporaryOfficeCache();
@@ -595,13 +596,13 @@ function App() {
               </div>
             </div>
             <div className="office-v2-panel office-operations">
-              <div className="office-section-title"><h3>♣ OPERATIONS FLOOR</h3><span>{workerAgents.length} specialist agents</span></div>
+              <div className="office-section-title"><h3>♣ OPERATIONS FLOOR</h3><div className="office-light-controls"><button type="button" className={`office-lights-toggle ${progressLightsEnabled ? "enabled" : ""}`} onClick={() => setProgressLightsEnabled(x => !x)} aria-pressed={progressLightsEnabled} title="Turn all progress indicator lights on or off">💡 Lights {progressLightsEnabled ? "On" : "Off"}</button><span>{workerAgents.length} specialist agents</span></div></div>
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
               <div className="office-agent-grid office-v3-team">
                 {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
                   <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><OfficePortrait role={a.id}/></div>
                   <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
-                  <MiniProgress completed={completedByAgent[a.id]??0} assigned={activeTasks.filter(t=>t.agentId===a.id).length}/>
+                  <MiniProgress completed={completedByAgent[a.id]??0} assigned={activeTasks.filter(t=>t.agentId===a.id).length} lightsEnabled={progressLightsEnabled} blocked={activeTasks.some(t=>t.agentId===a.id && !!t.blocker)}/>
                   {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}
                 </button>)}
               </div>
@@ -665,7 +666,7 @@ function formatDuration(value: number) { const m = Math.floor(value / 60).toStri
 function Room({x, y, w, h, title, cls}: {x: number; y: number; w: number; h: number; title: string; cls: string}) { return <div className={`room ${cls}`} style={{left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`}}><span>{title}</span></div>; }
 function Desk({x, y}: {x: number; y: number}) { return <div className="desk" style={{left: `${x}%`, top: `${y}%`}}><div className="monitor">▣</div><div className="chair">◉</div></div>; }
 function TaskLights({completed}: {completed: number}) { const pct = Math.round((completed / TASK_TARGET) * 100); return <div className="task-progress"><div className="task-lights" aria-label={`${completed} of ${TASK_TARGET} tasks completed`}>{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i < completed ? 'on' : 'off'} />)}</div><span>{completed}/{TASK_TARGET} task <b>{pct}%</b></span></div>; }
-function MiniProgress({completed, assigned=0}: {completed: number; assigned?: number}) { const count=Math.min(TASK_TARGET,Math.max(0,completed+assigned)); return <div className="mini-progress" title={`${completed} completed, ${assigned} unfinished tasks`}><div className="mini-progress-bars">{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={i<count ? "on" : "off"} />)}</div><span>{count}/{TASK_TARGET} task</span></div>; }
+function MiniProgress({completed, assigned=0, lightsEnabled=true, blocked=false}: {completed: number; assigned?: number; lightsEnabled?: boolean; blocked?: boolean}) { const count=Math.min(TASK_TARGET,Math.max(0,completed+assigned)); return <div className={`mini-progress ${!lightsEnabled ? "lights-off" : ""} ${blocked ? "lights-blocked" : ""}`} title={`${completed} completed, ${assigned} unfinished tasks${blocked ? " (blocked)" : ""}; lights ${lightsEnabled ? "on" : "off"}`}><div className="mini-progress-bars">{Array.from({length: TASK_TARGET}, (_, i) => <i key={i} className={lightsEnabled && i<count ? "on" : "off"} />)}</div><span>{count}/{TASK_TARGET} task</span></div>; }
 function AgentSprite({agent, completed}: {agent: Agent; completed: number}) { const p = agent.destination ?? agent.position; const initial = agent.name[0]; const bubble = agent.state === 'assigned-task' ? 'Task received…' : agent.state === 'preparing' ? 'Preparing…' : agent.state === 'working-task' ? (agent.id === 'developer' ? 'Coding…' : 'Working on task…') : agent.state === 'coffee' ? 'Coffee break ☕' : agent.state === 'snack' ? 'Snack break 🍪🥤' : agent.state === 'lunch' ? 'Lunch 🍜🍱' : agent.state === 'break' ? 'Taking a break 🛋️' : agent.state === 'off-duty' ? 'Resting…' : agent.state === 'blocked' ? (agent.id === 'implement' ? 'Provider error — check dashboard' : 'Blocked — need Alex') : agent.currentTask ?? agent.state; const developerStyle = agent.id === 'developer' ? {background: '#ffb86b'} : undefined; return <div className={`agent state-${agent.state}`} title={`${agent.role} • ${agent.state}`} style={{left: `${p.x}%`, top: `${p.y}%`}}><div className="bubble">{bubble}</div><div className={`avatar ${agent.id}`} style={developerStyle}>{initial}</div><small>{agent.name}</small>{agent.id !== 'manager' && <TaskLights completed={completed} />}</div>; }
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
