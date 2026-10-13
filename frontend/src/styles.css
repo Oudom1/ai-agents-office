@@ -88,3 +88,31 @@
 .office-summary-card strong{font-size:31px;line-height:1;font-variant-numeric:tabular-nums;color:white}
 @media(max-width:800px){.office-task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.office-summary-card{padding:12px}}
 @media(max-width:460px){.office-summary-card{gap:9px}.office-summary-card .summary-icon{font-size:20px}.office-summary-card strong{font-size:24px}}
+
+/* Illustrated agent workstations — replace generic purple gradients with role-focused scenery */
+.office-v3 .office-agent-grid.office-v3-team{gap:13px}
+.office-v3 .office-v3-agent{position:relative;isolation:isolate;overflow:hidden;min-height:145px;display:grid;grid-template-columns:116px 1fr;grid-template-rows:1fr auto;align-items:center;gap:5px 12px;text-align:left;padding:12px 15px!important;border:1px solid var(--agent-border,#3e9fff)!important;border-radius:15px!important;background:radial-gradient(circle at 85% 20%,var(--agent-glow,#1f5da8) 0%,transparent 55%),linear-gradient(120deg,#0d2145 0%,#0a1234 75%)!important;box-shadow:inset 0 0 26px #041e58,0 2px 9px #0005!important;color:#f4faff}
+.office-v3 .office-v3-agent:before{content:'▦　▥　▦';position:absolute;z-index:-1;right:-12px;bottom:25px;font-size:40px;letter-spacing:5px;color:var(--agent-border,#4de1fd);opacity:.12;transform:perspective(90px) rotateY(-20deg)}
+.office-v3 .office-v3-agent:after{content:'✦';position:absolute;right:14px;top:13px;font-size:23px;color:var(--agent-border,#52b4ff);opacity:.55}
+.office-v3 .office-v3-agent .office-role-avatar{width:106px!important;height:112px!important;grid-row:1/3;display:flex!important;justify-content:center;align-items:center;position:relative;overflow:hidden;background:linear-gradient(160deg,var(--agent-back,#194b8f),#0c1937)!important;border:1px solid var(--agent-border,#6ec8ff)!important;border-radius:15px!important;box-shadow:0 0 18px color-mix(in srgb,var(--agent-border,#48baff) 28%,transparent)!important}
+.office-v3 .office-v3-agent .avatar-role-icon{position:absolute;z-index:2;right:4px;top:4px;background:#08224d;color:var(--agent-border,#6ae6ff);border:1px solid currentColor;border-radius:8px;padding:5px;font-size:13px}
+.office-v3 .illustrated-agent-face{font-size:59px;line-height:1;filter:drop-shadow(0 5px 6px #0008);transform:none!important}
+.office-v3 .office-v3-agent .office-agent-detail{min-width:0;align-self:end;position:relative;z-index:1}
+.office-v3 .office-v3-agent .office-agent-detail b{font-size:23px;color:#fff}
+.office-v3 .office-v3-agent .office-agent-detail small{color:#b4daec}
+.office-v3 .office-v3-agent .office-live{color:#29efb4}
+.office-v3 .office-v3-agent .mini-progress{grid-column:2;align-self:start}
+.office-v3 .office-v3-security{--agent-border:#e457fb;--agent-glow:#6425aa;--agent-back:#4a216e}
+.office-v3 .office-v3-sysadmin{--agent-border:#32cbff;--agent-glow:#144ca1;--agent-back:#145d86}
+.office-v3 .office-v3-cloud{--agent-border:#69e3ff;--agent-glow:#185d8f;--agent-back:#255a99}
+.office-v3 .office-v3-qa{--agent-border:#ffbd46;--agent-glow:#83530d;--agent-back:#98622d}
+.office-v3 .office-v3-implement{--agent-border:#a88dff;--agent-glow:#39319a;--agent-back:#433789}
+.office-v3 .office-v3-developer{--agent-border:#32e9af;--agent-glow:#117d7c;--agent-back:#0a816f}
+.office-v3 .office-manager.office-v3-manager{position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,#153e86,#101739 70%)!important}
+.office-v3 .office-manager.office-v3-manager:before{content:'🌿';position:absolute;left:10px;bottom:15px;font-size:35px;opacity:.35}
+.office-v3 .office-manager.office-v3-manager:after{content:'🪴';position:absolute;right:15px;bottom:18px;font-size:37px;opacity:.5}
+.office-v3 .illustrated-manager{width:150px!important;height:147px!important;display:flex!important;justify-content:center;align-items:center;flex-direction:column;background:radial-gradient(circle,#2d59a7,#12214e)!important;border:2px solid #218eff!important;border-radius:23px!important;box-shadow:0 0 23px #208fff88!important}
+.office-v3 .illustrated-manager .manager-face{font-size:75px;line-height:1.2}
+.office-v3 .illustrated-manager .manager-desk{font-size:23px;position:absolute;margin-top:88px;margin-left:75px}
+@media(max-width:640px){.office-v3 .office-v3-agent{grid-template-columns:86px 1fr;min-height:125px}.office-v3 .office-v3-agent .office-role-avatar{width:79px!important;height:88px!important}.office-v3 .illustrated-agent-face{font-size:45px}.office-v3 .office-v3-agent .office-agent-detail b{font-size:19px}}
+@media(prefers-reduced-motion:reduce){.office-v3 .office-v3-agent,.office-v3 .illustrated-agent-face{animation:none!important;transition:none!important}}
