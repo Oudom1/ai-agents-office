@@ -298,3 +298,11 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .office-approved .office-v3-agent .mini-progress span{color:#b5f9ff!important;font-size:11px!important;font-weight:800!important;text-shadow:0 0 4px #17cbff;white-space:nowrap}
 .office-approved .office-v3-agent:hover .mini-progress-bars i.on{box-shadow:0 0 9px #39ecff!important}
 @media(max-width:630px){.office-approved .office-v3-agent .mini-progress{gap:4px!important}.office-approved .office-v3-agent .mini-progress-bars i{width:3px!important}.office-approved .office-v3-agent .mini-progress span{font-size:9px!important}}
+
+.office-approved .office-light-controls{display:flex;align-items:center;gap:10px}
+.office-approved .office-lights-toggle{width:auto!important;margin:0!important;padding:7px 12px!important;border-radius:100px!important;border:1px solid #415a87!important;background:#111a39!important;color:#8ca2bd!important;font-size:12px!important;line-height:1.2!important;cursor:pointer!important;box-shadow:none!important}
+.office-approved .office-lights-toggle.enabled{color:#e9ffff!important;border-color:#20c9ff!important;background:#08385c!important;box-shadow:0 0 10px #16c6ff65!important}
+.office-approved .mini-progress.lights-off .mini-progress-bars i{background:#263a5a!important;box-shadow:none!important;opacity:.45!important}
+.office-approved .mini-progress.lights-off span{color:#96a3be!important;text-shadow:none!important}
+.office-approved .mini-progress.lights-blocked:not(.lights-off) .mini-progress-bars i.on{background:#ff8c45!important;box-shadow:0 0 7px #ff8c45!important}
+@media(max-width:600px){.office-approved .office-light-controls{gap:5px;flex-wrap:wrap}.office-approved .office-lights-toggle{font-size:10px!important;padding:6px 8px!important}}
