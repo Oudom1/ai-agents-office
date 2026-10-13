@@ -155,8 +155,6 @@ function App() {
   const [showTypingTool, setShowTypingTool] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showSocialOffice, setShowSocialOffice] = useState(false);
-  const [showApprovedArtwork, setShowApprovedArtwork] = useState(true);
-  const [artworkLoadFailed, setArtworkLoadFailed] = useState(false);
 
   const refresh = async () => {
     try {
@@ -503,34 +501,12 @@ function App() {
   const selectedPlaceholder = selected === 'implement' ? 'Give Kai a comedy cartoon video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
-  if (showApprovedArtwork) return <div className="approved-static-page">
-    <div className="approved-static-toolbar"><div><b>AI AGENTS OFFICE</b><span>Approved design · Click a task or agent to open live operations</span></div><button type="button" onClick={() => setShowApprovedArtwork(false)}>Open Live Operations →</button></div>
-    {artworkLoadFailed ? <div className="approved-artwork-error"><h2>Office artwork could not load</h2><p>The design image is temporarily unavailable. You can still use the live office.</p><button type="button" onClick={() => setShowApprovedArtwork(false)}>Open Live Operations</button></div> :
-    <div className="approved-artwork-container">
-      <img className="approved-static-artwork" src="https://cdn.openart.ai/openart-uploads/production/attachment-transfers/1e02e47640d64eced0f274bf741876c4cdfccde844d796a85f239cd4862f6ba1.png" alt="Approved AI Agents Office illustrated design" onError={() => setArtworkLoadFailed(true)} />
-      {[
-        {name:'Pending tasks',left:2,top:12,width:30,height:11,agent:''},
-        {name:'To do tasks',left:33,top:12,width:20,height:11,agent:''},
-        {name:'In progress tasks',left:54,top:12,width:22,height:11,agent:''},
-        {name:'Blocked tasks',left:76,top:12,width:22,height:11,agent:''},
-        {name:'Alex manager',left:2,top:24,width:30,height:30,agent:'manager'},
-        {name:'Task board',left:33,top:24,width:65,height:30,agent:''},
-        {name:'Sam system administrator',left:3,top:63,width:30,height:12,agent:'sysadmin'},
-        {name:'Mina security',left:34,top:63,width:31,height:12,agent:'security'},
-        {name:'Noah cloud',left:66,top:63,width:32,height:12,agent:'cloud'},
-        {name:'Lina QA',left:3,top:75,width:30,height:11,agent:'qa'},
-        {name:'Kai implementation',left:34,top:75,width:31,height:11,agent:'implement'},
-        {name:'Leo development',left:66,top:75,width:32,height:11,agent:'developer'}
-      ].map(area=><button key={area.name} type="button" className="approved-hotspot" aria-label={`Open live operations: ${area.name}`} title={`Open ${area.name} in live operations`} style={{left:area.left+'%',top:area.top+'%',width:area.width+'%',height:area.height+'%'}} onClick={()=>{if(area.agent)setSelected(area.agent);setShowApprovedArtwork(false)}} />)}
-    </div>}
-    <p className="approved-static-footnote">Click an agent or task board to switch to live operations. Numbers in this illustration are examples, not live totals.</p>
-  </div>;
   if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
   return (
     <div className="app">
       <header>
         <div><h1>AI AGENTS OFFICE</h1><p>Live multi-agent operations floor</p></div>
-        <div className="header-actions"><button type="button" onClick={() => setShowApprovedArtwork(true)} style={{width:"auto",margin:0,background:"#19295d",color:"#c8edff"}}>◈ Approved Office Design</button><button type="button" style={{width:"auto",margin:0,background:"#e8f3ff",color:"#146fd0"}} onClick={()=>setShowSocialOffice(true)}>✦ Social Office</button><div className="status"><span className="dot" /> SYSTEM ONLINE</div>{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'560px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
+        <div className="header-actions"><button type="button" style={{width:"auto",margin:0,background:"#e8f3ff",color:"#146fd0"}} onClick={()=>setShowSocialOffice(true)}>✦ Social Office</button><div className="status"><span className="dot" /> SYSTEM ONLINE</div>{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'560px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
       </header>
 
       <main>
