@@ -289,3 +289,12 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .office-approved .office-v3-agent .anime-portrait{width:122px!important;height:130px!important}
 .office-approved .illustrated-manager .anime-portrait{width:150px!important;height:144px!important}
 @media(max-width:760px){.office-approved .office-v3-agent .anime-portrait{width:100px!important;height:120px!important}}
+
+/* Bright segmented per-agent progress from reference, displayed on all six cards */
+.office-approved .office-v3-agent .mini-progress{grid-column:2!important;display:flex!important;align-items:center!important;gap:9px!important;min-height:16px!important;margin:0!important;padding:0 1px 0 0!important;white-space:nowrap;z-index:2}
+.office-approved .office-v3-agent .mini-progress-bars{display:flex!important;align-items:center;gap:2px!important;flex-shrink:0;height:11px}
+.office-approved .office-v3-agent .mini-progress-bars i{display:block!important;width:5px!important;height:9px!important;transform:skewX(-22deg)!important;background:#214084!important;border:0!important;border-radius:1px!important;opacity:.65!important;box-shadow:none!important;animation:none!important}
+.office-approved .office-v3-agent .mini-progress-bars i.on{background:linear-gradient(#64f5ff,#1655ff)!important;opacity:1!important;box-shadow:0 0 5px #19d7ff,0 0 8px #306aff!important}
+.office-approved .office-v3-agent .mini-progress span{color:#b5f9ff!important;font-size:11px!important;font-weight:800!important;text-shadow:0 0 4px #17cbff;white-space:nowrap}
+.office-approved .office-v3-agent:hover .mini-progress-bars i.on{box-shadow:0 0 9px #39ecff!important}
+@media(max-width:630px){.office-approved .office-v3-agent .mini-progress{gap:4px!important}.office-approved .office-v3-agent .mini-progress-bars i{width:3px!important}.office-approved .office-v3-agent .mini-progress span{font-size:9px!important}}
