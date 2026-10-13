@@ -144,7 +144,7 @@ function bestAgentForTask(title: string) {
 
 function App() {
   const [agents, setAgents] = useState<Agent[]>(fallbackAgents);
-  const [tasks, setTasks] = useState<Task[]>(loadLocalTasks);
+  const [tasks, setTasks] = useState<Task[]>(() => loadLocalTasks().slice(0,150));
   const [selected, setSelected] = useState('sysadmin');
   const [taskTitle, setTaskTitle] = useState('');
   const [notice, setNotice] = useState('');
@@ -166,15 +166,15 @@ function App() {
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => JSON.stringify(prev)===JSON.stringify(incoming) ? prev : incoming); }
+        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => { const limited=incoming.slice(0,150); return JSON.stringify(prev)===JSON.stringify(limited) ? prev : limited; }); }
       }
     } catch {}
   };
 
   useEffect(() => {
     refresh();
-    const id = setInterval(() => { if (!document.hidden) void refresh(); }, 20000);
-    return () => clearInterval(id);
+    // Avoid background API polling that replaces task state during interaction.
+    return () => {};
   }, []);
 
   useEffect(() => {
@@ -201,8 +201,8 @@ function App() {
 
   useEffect(() => { const timer=setTimeout(()=>{ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks.slice(0,300))); } catch {} },1000); return ()=>clearTimeout(timer); }, [tasks]);
   useEffect(() => {
-    const id = setInterval(() => { if (!document.hidden) setNow(Date.now()); }, 10000);
-    return () => clearInterval(id);
+    // Static time snapshot avoids re-rendering every task card on a clock tick.
+    return () => {};
   }, []);
   useEffect(() => {
     if (!notice) return;
@@ -508,7 +508,7 @@ function App() {
       <main>
         <section className="office-card">
           <div className="office office-v2 office-v3">
-            <div className="office-v3-head"><div><span className="office-eyebrow">◈ AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished</div></div>
+            <div className="office-v3-head"><div><span className="office-eyebrow">◈ AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished <button type="button" className="office-reload" onClick={()=>void refresh()}>↻ Refresh</button></div></div>
             <div className="office-workflow">{[
               ['01','Assignment','manager'],['02','Development','developer'],['03','Verify & Fix','implement'],['04','Testing','qa'],['05','Support','manager'],['06','Deployment','cloud'],['07','Security','security'],['08','Live System','sysadmin']
             ].map(([number,title,id],i)=><button type="button" key={number} className={`office-flow-step flow-step-${i}`} onClick={()=>setSelected(id)} title={`Focus ${title}`}><span>{number}</span><b>{title}</b></button>)}</div>
@@ -537,7 +537,7 @@ function App() {
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
               <div className="office-agent-grid office-v3-team">
                 {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
-                  <div className="office-agent-portrait">{({sysadmin:'🧑‍💻',security:'👩‍💻',cloud:'👨‍🔧',qa:'👩‍🔬',implement:'🧑‍🔧',developer:'👨‍💻'} as Record<string,string>)[a.id]||'🤖'}</div>
+                  <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><span className="avatar-initial">{a.name.slice(0,1)}</span></div>
                   <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
                   <MiniProgress completed={completedByAgent[a.id]??0}/>
                   {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}

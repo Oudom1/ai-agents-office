@@ -60,3 +60,17 @@
 @keyframes officeCardEnter{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 @keyframes officeFlowGlow{0%,100%{filter:brightness(.88)}50%{filter:brightness(1.27)}}
 @media(prefers-reduced-motion:reduce){.office-v3 .office-operations:before,.office-v3 .office-v3-agent,.office-v3 .office-agent-portrait,.office-v3 .office-flow-step{animation:none!important}}
+
+/* Stability: static, distinct role avatars, no continuous animation or motion effects */
+.office-v3 .office-operations:before{display:none!important}
+.office-v3 .office-role-avatar{animation:none!important;transform:none!important;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;width:66px;height:66px;border-radius:18px;background:linear-gradient(145deg,#163e88,#091c44);border:1px solid #56b9ff;box-shadow:inset 0 1px #ffffff25,0 6px 14px #0005}
+.avatar-role-icon{font-size:18px;line-height:1;font-weight:800;color:#88ecff}
+.avatar-initial{font-size:21px;line-height:1;font-weight:900;color:#ffffff}
+.office-v3 .avatar-security{background:linear-gradient(145deg,#74399c,#21144f);border-color:#ec7cff}.office-v3 .avatar-security .avatar-role-icon{color:#ffb7ed}
+.office-v3 .avatar-qa{background:linear-gradient(145deg,#a73c82,#32144f);border-color:#ff8ecf}
+.office-v3 .avatar-cloud{background:linear-gradient(145deg,#087e93,#103254);border-color:#52f4db}
+.office-v3 .avatar-implement{background:linear-gradient(145deg,#7551c2,#301b62);border-color:#b99aff}
+.office-v3 .avatar-developer{background:linear-gradient(145deg,#1665a8,#102963);border-color:#78d5ff}
+.office-v3 .avatar-sysadmin{background:linear-gradient(145deg,#1b7c77,#123e49);border-color:#66f5d1}
+.office-v3 .office-flow-step,.office-v3 .office-v3-agent,.office-v3 .office-v3-online i{animation:none!important}
+.office-reload{display:inline-block;width:auto;margin:0 0 0 12px;padding:6px 9px;font-size:11px;border-radius:8px;background:#134272;border:1px solid #389ed0}
