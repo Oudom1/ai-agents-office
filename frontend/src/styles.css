@@ -245,3 +245,19 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .approved-hotspot{position:absolute!important;display:block!important;z-index:5;min-width:0!important;min-height:0!important;padding:0!important;margin:0!important;background:transparent!important;border:1px solid transparent!important;border-radius:8px!important;box-shadow:none!important;cursor:pointer!important;transition:border-color .15s,background-color .15s}
 .approved-hotspot:hover,.approved-hotspot:focus-visible{border-color:#43ecff!important;background:#1ce4ff19!important;outline:2px solid #33d8ff88;outline-offset:-3px}
 @media(prefers-reduced-motion:reduce){.approved-hotspot{transition:none!important}}
+
+/* Lightweight rotation interaction for agent portraits */
+.office-approved .office-v3-agent .illustrated-portrait-svg,
+.office-approved .illustrated-manager .illustrated-portrait-svg{
+ transform-origin:center center;transition:transform .55s cubic-bezier(.2,.8,.2,1),filter .3s ease;will-change:auto
+}
+.office-approved .office-v3-agent:hover .illustrated-portrait-svg,
+.office-approved .office-v3-agent:focus-visible .illustrated-portrait-svg,
+.office-approved .office-v3-agent.is-selected .illustrated-portrait-svg,
+.office-approved .office-manager:hover .illustrated-portrait-svg{
+ transform:perspective(380px) rotateY(18deg) rotateZ(-2deg) scale(1.04);
+ filter:drop-shadow(0 2px 11px #30b4ffb0)
+}
+@media(prefers-reduced-motion:reduce){
+ .office-approved .illustrated-portrait-svg{transform:none!important;transition:none!important}
+}
