@@ -504,10 +504,26 @@ function App() {
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
   if (showApprovedArtwork) return <div className="approved-static-page">
-    <div className="approved-static-toolbar"><div><b>AI AGENTS OFFICE</b><span>Approved design · Static visual preview</span></div><button type="button" onClick={() => setShowApprovedArtwork(false)}>Open Live Operations →</button></div>
+    <div className="approved-static-toolbar"><div><b>AI AGENTS OFFICE</b><span>Approved design · Click a task or agent to open live operations</span></div><button type="button" onClick={() => setShowApprovedArtwork(false)}>Open Live Operations →</button></div>
     {artworkLoadFailed ? <div className="approved-artwork-error"><h2>Office artwork could not load</h2><p>The design image is temporarily unavailable. You can still use the live office.</p><button type="button" onClick={() => setShowApprovedArtwork(false)}>Open Live Operations</button></div> :
-    <img className="approved-static-artwork" src="https://cdn.openart.ai/openart-uploads/production/attachment-transfers/1e02e47640d64eced0f274bf741876c4cdfccde844d796a85f239cd4862f6ba1.png" alt="Approved AI Agents Office visual design with Alex, Sam, Mina, Noah, Lina, Kai and Leo, task board and illustrated snacks and cafeteria" onError={() => setArtworkLoadFailed(true)} />}
-    <p className="approved-static-footnote">This image is a design preview. Task counts and agent statuses shown inside it are illustrative; use Live Operations for current tasks and assignments.</p>
+    <div className="approved-artwork-container">
+      <img className="approved-static-artwork" src="https://cdn.openart.ai/openart-uploads/production/attachment-transfers/1e02e47640d64eced0f274bf741876c4cdfccde844d796a85f239cd4862f6ba1.png" alt="Approved AI Agents Office illustrated design" onError={() => setArtworkLoadFailed(true)} />
+      {[
+        {name:'Pending tasks',left:2,top:12,width:30,height:11,agent:''},
+        {name:'To do tasks',left:33,top:12,width:20,height:11,agent:''},
+        {name:'In progress tasks',left:54,top:12,width:22,height:11,agent:''},
+        {name:'Blocked tasks',left:76,top:12,width:22,height:11,agent:''},
+        {name:'Alex manager',left:2,top:24,width:30,height:30,agent:'manager'},
+        {name:'Task board',left:33,top:24,width:65,height:30,agent:''},
+        {name:'Sam system administrator',left:3,top:63,width:30,height:12,agent:'sysadmin'},
+        {name:'Mina security',left:34,top:63,width:31,height:12,agent:'security'},
+        {name:'Noah cloud',left:66,top:63,width:32,height:12,agent:'cloud'},
+        {name:'Lina QA',left:3,top:75,width:30,height:11,agent:'qa'},
+        {name:'Kai implementation',left:34,top:75,width:31,height:11,agent:'implement'},
+        {name:'Leo development',left:66,top:75,width:32,height:11,agent:'developer'}
+      ].map(area=><button key={area.name} type="button" className="approved-hotspot" aria-label={`Open live operations: ${area.name}`} title={`Open ${area.name} in live operations`} style={{left:area.left+'%',top:area.top+'%',width:area.width+'%',height:area.height+'%'}} onClick={()=>{if(area.agent)setSelected(area.agent);setShowApprovedArtwork(false)}} />)}
+    </div>}
+    <p className="approved-static-footnote">Click an agent or task board to switch to live operations. Numbers in this illustration are examples, not live totals.</p>
   </div>;
   if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
   return (
