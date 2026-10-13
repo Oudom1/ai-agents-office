@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './styles.css';
+import SocialOffice from './SocialOffice.js';
 
 type Agent = {
   id: string;
@@ -152,6 +153,7 @@ function App() {
   const [now, setNow] = useState(Date.now());
   const [showTypingTool, setShowTypingTool] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showSocialOffice, setShowSocialOffice] = useState(false);
 
   const refresh = async () => {
     try {
@@ -498,11 +500,12 @@ function App() {
   const selectedPlaceholder = selected === 'implement' ? 'Give Kai a comedy cartoon video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
+  if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
   return (
     <div className="app">
       <header>
         <div><h1>AI AGENTS OFFICE</h1><p>Live multi-agent operations floor</p></div>
-        <div className="header-actions"><div className="status"><span className="dot" /> SYSTEM ONLINE</div>{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'560px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
+        <div className="header-actions"><button type="button" style={{width:"auto",margin:0,background:"#e8f3ff",color:"#146fd0"}} onClick={()=>setShowSocialOffice(true)}>✦ Social Office</button><div className="status"><span className="dot" /> SYSTEM ONLINE</div>{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'560px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
       </header>
 
       <main>

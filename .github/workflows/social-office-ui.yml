@@ -1,0 +1,14 @@
+name: Social Office UI build
+on:
+  push:
+    branches: [feature/social-feed-office-view]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cd frontend && npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: cd frontend && npm run build
