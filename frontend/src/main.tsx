@@ -511,8 +511,8 @@ function App() {
 
       <main>
         <section className="office-card">
-          <div className="office office-v2 office-v3">
-            <div className="office-v3-head"><div><span className="office-eyebrow">◈ AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished <button type="button" className="office-reload" onClick={()=>void refresh()}>↻ Refresh</button></div></div>
+          <div className="office office-v2 office-v3 office-approved">
+            <div className="office-v3-head"><div className="approved-header-copy"><span className="approved-building" aria-hidden="true">🏙️</span><span className="office-eyebrow">AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished <button type="button" className="office-reload" onClick={()=>void refresh()}>↻ Refresh</button></div></div>
             <div className="office-task-summary" aria-label="Task dashboard summary">
               <div className="office-summary-card pending"><span className="summary-icon">▤</span><div><span>Pending Tasks</span><strong>{activeTasks.length}</strong></div></div>
               <div className="office-summary-card todo"><span className="summary-icon">☷</span><div><span>To Do</span><strong>{activeTasks.filter(t=>!t.blocker && ['queued','active',undefined].includes(t.phase)).length}</strong></div></div>
@@ -540,7 +540,7 @@ function App() {
               </div>
             </div>
             <div className="office-v2-panel office-operations">
-              <div className="office-section-title"><h3>♧ OPERATIONS FLOOR</h3><span>{workerAgents.length} specialist agents</span></div>
+              <div className="office-section-title"><h3>♣ OPERATIONS FLOOR</h3><span>{workerAgents.length} specialist agents</span></div>
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
               <div className="office-agent-grid office-v3-team">
                 {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
@@ -552,8 +552,8 @@ function App() {
               </div>
             </div>
             <div className="office-bottom">
-              <div className="office-v2-panel office-lounge"><h3>☕ LOUNGE / BREAK · SNACKS</h3><p>Recharge, relax and share ideas.</p><div className="office-lounge-art">🛋️ <span>☕ 🍪 🍎 🥤</span></div></div>
-              <div className="office-v2-panel office-cafeteria"><h3>♨ CAFETERIA / LUNCH · FOOD</h3><p>Lunch break and refreshments.</p><div className="office-lounge-art">🍽️ <span>🍜 🍱 🥗 ☕</span></div></div>
+              <div className="office-v2-panel office-lounge"><div className="break-copy"><h3>☕ LOUNGE / BREAK · SNACKS</h3><p>Take a break, recharge, and chat with your team.</p></div><div className="approved-snack-scene" aria-hidden="true"><span>☕</span><span>🍩</span><span>🍪</span><span>🍿</span></div></div>
+              <div className="office-v2-panel office-cafeteria"><div className="break-copy"><h3>🍴 CAFETERIA / LUNCH · FOOD</h3><p>Good food fuels great ideas.</p></div><div className="approved-snack-scene" aria-hidden="true"><span>🍱</span><span>🍔</span><span>🍕</span><span>🍜</span></div></div>
             </div>
           </div>
         </section>

@@ -133,3 +133,74 @@
 .office-v3 .office-lounge{background:linear-gradient(100deg,#151e51,#572954)!important;border-color:#a774ff!important}
 .office-v3 .office-cafeteria{background:linear-gradient(100deg,#151e51,#764a23)!important;border-color:#ffbd4e!important}
 @media(max-width:650px){.office-v3 .office-v3-agent{grid-template-columns:86px 1fr;min-height:112px!important}.office-v3 .office-v3-agent .office-role-avatar{width:81px!important;height:90px!important}.office-v3 .office-v3-head:before{display:none}}
+
+/* APPROVED CYBER OFFICE VISUAL SYSTEM — static by design for performance */
+body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,transparent 1px),linear-gradient(90deg,#1b47721a 1px,transparent 1px);background-size:40px 40px}
+.office-approved{font-family:Inter,system-ui,'Segoe UI',sans-serif;background:linear-gradient(150deg,#061330,#020b23 70%)!important;border:0!important;border-radius:18px;padding:14px!important;box-shadow:none!important;overflow:hidden}
+.office-approved .office-v3-head{min-height:116px;display:flex;align-items:center;justify-content:space-between;background:radial-gradient(ellipse at 80% 25%,#1356be55,transparent 55%),linear-gradient(90deg,#041029aa,#071b46ad)!important;border:0!important;padding:16px 20px 20px 90px!important;margin:0 0 10px!important;position:relative}
+.office-approved .approved-header-copy{position:relative}
+.office-approved .approved-building{position:absolute;left:-80px;top:0;font-size:58px;filter:drop-shadow(0 0 8px #3b94fa)}
+.office-approved .office-eyebrow{font-size:15px!important;letter-spacing:2.3px!important;color:#4ceaf6!important;font-weight:900}
+.office-approved .office-v3-head h2{font-size:clamp(31px,3.8vw,51px)!important;line-height:1.1;margin:5px 0!important;color:#f7faff!important;letter-spacing:-1px}
+.office-approved .office-v3-head h2::first-letter{color:#fff}
+.office-approved .office-v3-head p{font-size:14px;color:#b0d8fd}
+.office-approved .office-v3-online{border:1px solid #118bff!important;border-radius:100px!important;background:#031f42!important;color:#dff7ff!important;padding:8px 11px!important;white-space:nowrap;box-shadow:0 0 16px #067fff55}
+.office-approved .office-reload{font-weight:900;background:linear-gradient(180deg,#8650fc,#4a07d0)!important;border:1px solid #ae7aff!important;color:white!important;border-radius:14px!important;padding:10px 18px!important;box-shadow:0 0 14px #6c2fffa8}
+.office-approved .office-task-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:8px 0 12px!important}
+.office-approved .office-summary-card{height:95px!important;min-height:95px!important;position:relative;border-radius:12px!important;display:flex;align-items:center;gap:20px;background:linear-gradient(125deg,#092b63,#071536)!important;border:1.5px solid #178cff!important;box-shadow:inset 0 1px 20px #0657fc22,0 0 12px #188eff36!important;padding:12px 20px!important}
+.office-approved .office-summary-card.pending{background:linear-gradient(120deg,#7116e6,#3e04b8)!important;border-color:#e23eff!important;box-shadow:0 0 15px #c017ff44!important}
+.office-approved .office-summary-card.progress{background:linear-gradient(110deg,#182c83,#121d59)!important;border-color:#574fff!important}
+.office-approved .office-summary-card.blocked{background:linear-gradient(110deg,#39133f,#181436)!important;border-color:#fb147b!important}
+.office-approved .office-summary-card .summary-icon{font-size:38px!important;line-height:1;filter:drop-shadow(0 0 9px currentColor)}
+.office-approved .office-summary-card>div>span{font-size:14px!important;color:#d6eafa!important}
+.office-approved .office-summary-card strong{font-size:38px!important}
+.office-approved .office-summary-card:after{content:'▂ ▄ ▆ █   ›';font-size:17px;color:#3fa5ff;opacity:.45;position:absolute;right:10px;bottom:17px;letter-spacing:1px}
+.office-approved .office-summary-card.pending:after{color:#dc87ff}
+.office-approved .office-summary-card.blocked:after{color:#fa5c99}
+.office-approved .office-top{display:grid;grid-template-columns:33% 1fr;gap:13px!important;margin:0 0 13px!important}
+.office-approved .office-v2-panel{border-radius:14px!important;background:#09163b!important;border:1.5px solid #147fff!important;box-shadow:inset 0 0 28px #102f6e55!important}
+.office-approved .office-v2-panel h3{font-weight:850;letter-spacing:.6px;font-size:19px!important}
+.office-approved .office-v2-panel>p{color:#a9bfe2;font-size:13px}
+.office-approved .office-manager{position:relative;min-height:309px;background:radial-gradient(ellipse at 50% 80%,#123f8a66,transparent 55%),linear-gradient(180deg,#0d1c4e,#091330)!important}
+.office-approved .office-manager:before{content:'🪴';font-size:38px;left:6px;bottom:25px;position:absolute;opacity:.75}
+.office-approved .office-manager:after{content:'🖥️  🌿';position:absolute;right:4px;bottom:28px;font-size:28px;opacity:.65}
+.office-approved .illustrated-manager{width:154px!important;height:146px!important;border:3px solid #1ac7ff!important;box-shadow:0 0 20px #058aff!important;background:#082a68!important;margin-top:5px}
+.office-approved .office-manager>b{font-size:20px!important;color:white!important}
+.office-approved .office-live{color:#00e9b9!important;font-weight:700}
+.office-approved .office-board{min-width:0}
+.office-approved .office-board .office-kanban{gap:10px;margin:12px 0}
+.office-approved .office-v3-kanban>div{min-width:0;border:1px solid #2d83ff!important;background:#0b1d49!important;border-radius:11px!important;padding:11px 13px!important}
+.office-approved .office-v3-kanban>div:nth-child(3){border-color:#ed316e!important}
+.office-approved .office-v3-kanban>div:nth-child(4){border-color:#01cc93!important}
+.office-approved .office-v3-kanban strong{font-size:28px;color:#fff}
+.office-approved .office-v3-preview>div{border:1px solid #3655a4!important;border-radius:8px;background:#0b1b45!important;color:#d9e7ff!important;min-height:36px;margin-bottom:6px;font-size:12px}
+.office-approved .office-v3-preview span{color:#00e5c5!important}
+.office-approved .office-operations{padding:17px!important;margin-bottom:12px!important}
+.office-approved .office-agent-grid{gap:9px!important;grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.office-approved .office-v3-agent{--agent-border:#159dff;display:grid!important;grid-template-columns:128px 1fr!important;grid-template-rows:1fr auto!important;min-height:127px!important;max-height:145px;padding:5px!important;border-radius:12px!important;position:relative;overflow:hidden;background:radial-gradient(ellipse at 85% 50%,var(--agent-glow,#1851aa) 0%,transparent 80%),linear-gradient(120deg,#0b2555,#06133b)!important;border:1.5px solid var(--agent-border)!important;box-shadow:inset 0 0 16px #0c6ef444!important;gap:0 9px!important}
+.office-approved .office-v3-agent .office-role-avatar{height:100%!important;width:124px!important;grid-row:1/3!important;border:0!important;border-radius:9px!important;background:none!important;box-shadow:none!important}
+.office-approved .office-v3-agent .illustrated-portrait-svg{height:128px!important;width:124px!important;object-fit:cover;filter:drop-shadow(0 0 7px var(--agent-border))}
+.office-approved .office-v3-agent .avatar-role-icon{display:none!important}
+.office-approved .office-v3-agent .office-agent-detail{align-self:end;padding-right:5px;z-index:1}
+.office-approved .office-v3-agent .office-agent-detail b{font-size:20px!important}
+.office-approved .office-v3-agent .office-agent-detail small{font-size:12px!important;color:#a9e0f7!important}
+.office-approved .office-v3-agent .office-live{font-size:12px!important}
+.office-approved .office-v3-agent .mini-progress{align-self:center!important;z-index:1}
+.office-approved .office-v3-agent:after{content:'✦';font-size:20px;color:var(--agent-border);right:10px;top:5px;opacity:.7}
+.office-approved .office-v3-agent:before{content:'▤ ▥ ▤';right:0;bottom:12px;font-size:27px;color:var(--agent-border);opacity:.18}
+.office-approved .office-v3-security{--agent-border:#db27f4;--agent-glow:#59229b}
+.office-approved .office-v3-qa{--agent-border:#ffc429;--agent-glow:#7f5017}
+.office-approved .office-v3-implement{--agent-border:#9269fc;--agent-glow:#3b2d91}
+.office-approved .office-v3-developer{--agent-border:#00efba;--agent-glow:#076d70}
+.office-approved .office-v3-cloud{--agent-border:#03d4ff;--agent-glow:#135694}
+.office-approved .office-bottom{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px!important}
+.office-approved .office-bottom .office-v2-panel{position:relative;min-height:130px!important;padding:15px 17px!important;display:flex;align-items:flex-start;justify-content:space-between;overflow:hidden}
+.office-approved .office-lounge{background:linear-gradient(110deg,#161748,#30204f 57%,#824a23)!important;border-color:#cf73ff!important}
+.office-approved .office-cafeteria{background:linear-gradient(110deg,#161748,#4e2c39 56%,#9d591a)!important;border-color:#ffb631!important}
+.office-approved .break-copy{position:relative;z-index:1;max-width:52%}
+.office-approved .break-copy p{color:#d4d9f5;font-size:12px}
+.office-approved .approved-snack-scene{position:absolute;right:12px;bottom:8px;display:flex;align-items:flex-end;gap:6px;font-size:36px;filter:drop-shadow(0 4px 9px #0008)}
+.office-approved .approved-snack-scene span:nth-child(2){font-size:42px}
+@media(max-width:1030px){.office-approved .office-top{grid-template-columns:1fr}.office-approved .office-agent-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.office-approved .office-v3-head{padding-left:15px!important}.office-approved .approved-building{display:none}}
+@media(max-width:650px){.office-approved .office-task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.office-approved .office-agent-grid,.office-approved .office-bottom{grid-template-columns:1fr!important}.office-approved .office-v3-agent{grid-template-columns:103px 1fr!important}.office-approved .office-v3-agent .office-role-avatar{width:100px!important}.office-approved .office-v3-agent .illustrated-portrait-svg{width:100px!important}.office-approved .office-v3-head{display:block!important}.office-approved .office-summary-card{padding:12px!important}.office-approved .office-summary-card strong{font-size:29px!important}.office-approved .office-summary-card:after{display:none}.office-approved .break-copy{max-width:60%}.office-approved .approved-snack-scene{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.office-approved *{animation:none!important;transition:none!important}}
