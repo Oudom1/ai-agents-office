@@ -227,3 +227,15 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .office-approved .office-operations{overflow:visible!important}
 @media(max-width:760px){.office-approved .office-v3-agent{height:150px!important;grid-template-columns:110px minmax(0,1fr)!important}.office-approved .office-v3-agent .office-role-avatar{width:100px!important;height:120px!important}.office-approved .office-v3-agent .illustrated-portrait-svg{width:100px!important;height:120px!important}.office-approved .office-bottom{grid-template-columns:1fr!important}}
 @media(max-width:400px){.office-approved .office-v3-agent .office-agent-detail b{font-size:19px!important}.office-approved .office-v3-agent .office-agent-detail small{font-size:11px!important}}
+
+/* Exact user-approved artwork: static default route, real operation board remains accessible. */
+.approved-static-page{min-height:100vh;background:#02091e;padding:12px 12px 24px;color:#ecfaff;font-family:Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:10px}
+.approved-static-toolbar{width:min(100%,1472px);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 17px;border:1px solid #176bad;background:#07183b;border-radius:14px;box-shadow:0 1px 12px #0245b448}
+.approved-static-toolbar>div{display:flex;flex-direction:column;gap:2px}
+.approved-static-toolbar b{color:#45efff;letter-spacing:1.5px}
+.approved-static-toolbar span{font-size:12px;color:#aac7e7}
+.approved-static-toolbar button,.approved-artwork-error button{flex-shrink:0;display:inline-block;width:auto;margin:0;padding:10px 17px;background:linear-gradient(130deg,#6b27df,#3377ee);color:#fff;border:1px solid #a58aff;border-radius:12px;font-weight:700;cursor:pointer}
+.approved-static-artwork{display:block;width:min(100%,1448px);height:auto;max-width:100%;object-fit:contain;border:0;border-radius:4px}
+.approved-static-footnote{font-size:11px;color:#a4bce2;text-align:center;margin:0;line-height:1.5}
+.approved-artwork-error{padding:50px 25px;border:1px solid #d94970;background:#24112d;border-radius:14px;text-align:center}
+@media(max-width:650px){.approved-static-page{padding:6px 4px 16px}.approved-static-toolbar{padding:9px 10px;border-radius:8px}.approved-static-toolbar b{font-size:12px}.approved-static-toolbar span{font-size:10px}.approved-static-toolbar button{font-size:11px;padding:9px 11px}.approved-static-artwork{width:100%;border-radius:1px}}

@@ -1,0 +1,19 @@
+name: Approved Office Static View QA
+on:
+  push:
+    branches: [feature/exact-approved-static-office-v25]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --ignore-scripts --no-audit --no-fund
+      - run: npm run build -w frontend
+      - name: Verify approved image is reachable
+        run: |
+          curl -fL --retry 3 --max-time 25 -o /tmp/approved-office.png "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/1e02e47640d64eced0f274bf741876c4cdfccde844d796a85f239cd4862f6ba1.png"
+          file /tmp/approved-office.png | grep -q 'PNG image data'
+          test $(stat -c%s /tmp/approved-office.png) -gt 100000
