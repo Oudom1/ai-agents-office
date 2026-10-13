@@ -278,3 +278,7 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .office-approved .office-manager:hover .anime-portrait img{transform:scale(1.025)!important}
 @media(max-width:760px){.office-approved .office-v3-agent .anime-portrait{width:100px!important;height:120px!important}}
 @media(prefers-reduced-motion:reduce){.office-approved .anime-portrait img{transition:none!important;transform:none!important}}
+
+/* QA fix: pull sprite back to show full head and surrounding desk, not a clipped face */
+.office-approved .anime-portrait img{width:960px!important}
+.office-approved .office-v3-agent .anime-portrait{background:#0b2452!important}
