@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
+import { initializeTaskHistory, persistTaskHistory } from './task-history.js';
 import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog } from './auth-store.js';
 
 const app = express();
@@ -336,6 +337,7 @@ function advanceOfficeTasks(){
     (agent as any).destination=agent.home;
   }
 }
+await initializeTaskHistory(tasks);
 advanceOfficeTasks();
 setInterval(advanceOfficeTasks,5000);
 
@@ -585,49 +587,80 @@ app.post('/api/agents/:agentId/state', requireAuth, (req,res)=>{
   res.json(agent);
 });
 
-app.post('/api/tasks', requireAuth, (req,res)=>{
+app.post('/api/tasks', requireAuth, async (req,res)=>{
   const {agentId,title,description=''}=req.body;
   const agent=agents.find(a=>a.id===agentId);
   if(!agent || !title) return res.status(400).json({error:'agentId and title are required'});
   const task:any={id:crypto.randomUUID(),agentId,title,description,status:'active',createdAt:new Date().toISOString()};
   tasks.unshift(task);
+  try { await persistTaskHistory(tasks); } catch { tasks.shift(); return res.status(503).json({error:'Could not save task'}); }
   agent.state='assigned-task';
   (agent as any).currentTask=title;
   (agent as any).destination=agent.home;
   res.status(201).json(task);
 });
 
-app.patch('/api/tasks/:id/done', requireAuth, (req,res)=>{
-  const task=tasks.find(t=>t.id===req.params.id);
-  if(!task) return res.status(404).json({error:'Task not found'});
-  task.status='done';
-  task.completedAt=new Date().toISOString();
+app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task)return res.status(404).json({error:'Task not found'});
+  if(task.status==='done')return res.json(task);
+  const evidence=typeof req.body?.evidenceUrl==='string' ? req.body.evidenceUrl.trim() : '';
+  let verified:URL;
+  try {
+    verified=new URL(evidence);
+    if(!['https:','http:'].includes(verified.protocol))throw Error('Unsupported URL');
+  } catch {return res.status(422).json({error:'Completion requires an evidenceUrl for the real deliverable or QA result'});}
+  const prior={...task};
+  task.status='done';task.phase='completed';task.completedAt=new Date().toISOString();
+  task.evidenceUrl=verified.toString();
+  task.resultMessage='Completed with linked deliverable evidence.';
+  try{await persistTaskHistory(tasks);}catch{Object.assign(task,prior);return res.status(503).json({error:'Database save failed'});}
   const agent=agents.find(a=>a.id===task.agentId);
-  if(agent){agent.state='working'; delete (agent as any).currentTask; (agent as any).destination=agent.home;}
+  if(agent){agent.state='working';delete (agent as any).currentTask;(agent as any).destination=agent.home;}
   res.json(task);
 });
 
+// Workers must explicitly claim assignments; a claim never implies completion.
+app.post('/api/tasks/:id/claim', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task)return res.status(404).json({error:'Task not found'});
+  if(task.status==='done' || task.blocker)return res.status(409).json({error:'Task cannot be claimed'});
+  if(task.phase==='executing')return res.status(409).json({error:'Already claimed'});
+  const worker=typeof req.body?.worker==='string' ? req.body.worker.trim().slice(0,120) : '';
+  if(!worker)return res.status(400).json({error:'Worker name is required'});
+  const prior={...task};
+  task.phase='executing';task.worker=worker;task.startedAt=new Date().toISOString();
+  task.resultMessage='Claimed by '+worker+'; deliverable evidence is required before completion.';
+  try{await persistTaskHistory(tasks);}catch{Object.assign(task,prior);return res.status(503).json({error:'Database write failed'});}
+  return res.json(task);
+});
+
 // Bulk-delete completed history only. Expected count avoids accidental stale-tab deletion.
-app.delete('/api/tasks/completed', requireAuth, (req,res)=>{
+app.delete('/api/tasks/completed', requireAuth, async (req,res)=>{
   const expected=Number(req.query.expectedCount);
   if(!Number.isSafeInteger(expected)||expected<0)return res.status(400).json({error:'Valid expectedCount is required'});
   const actual=tasks.filter(t=>t.status==='done').length;
   if(actual!==expected)return res.status(409).json({error:`Completed count changed (now ${actual}). Refresh before clearing.`,actualCount:actual});
+  const before=[...tasks];
   for(let i=tasks.length-1;i>=0;i--)if(tasks[i].status==='done')tasks.splice(i,1);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(0,tasks.length,...before);return res.status(503).json({error:'Database write failed'});}
   return res.json({ok:true,removedCount:actual,activePreserved:tasks.length});
 });
 
-app.delete('/api/tasks/:id', requireAuth, (req,res)=>{
+app.delete('/api/tasks/:id', requireAuth, async (req,res)=>{
   const index=tasks.findIndex(t=>t.id===req.params.id);
   if(index<0) return res.status(404).json({error:'Task not found'});
   const [removed]=tasks.splice(index,1);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(index,0,removed);return res.status(503).json({error:'Database write failed'});}
   const agent=agents.find(a=>a.id===removed.agentId);
   if(agent && (agent as any).currentTask===removed.title){agent.state='working'; delete (agent as any).currentTask;}
   res.json({ok:true,removed});
 });
 
-app.delete('/api/tasks', requireAuth, (_req,res)=>{
+app.delete('/api/tasks', requireAuth, async (_req,res)=>{
+  const before=[...tasks];
   tasks.splice(0,tasks.length);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(0,tasks.length,...before);return res.status(503).json({error:'Database write failed'});}
   agents.forEach(a=>{delete (a as any).currentTask;if(a.id!=='implement')a.state='working';});
   res.json({ok:true});
 });

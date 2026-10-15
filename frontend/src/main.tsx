@@ -203,16 +203,7 @@ function App() {
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => {
-            // Preserve completed results recorded in this browser, even if an older
-            // backend instance has not stored the PATCH /done transition yet.
-            const locallyDone=new Map(prev.filter(t=>t.status==='done').map(t=>[t.id,t]));
-            const merged=incoming.map((task:Task) => locallyDone.has(task.id) ? {...task,...locallyDone.get(task.id)!} : task);
-            const incomingIds=new Set(incoming.map((task:Task)=>task.id));
-            for(const local of locallyDone.values()) if(!incomingIds.has(local.id) && !clearedIds().has(local.id)) merged.push(local);
-            const limited=merged.slice(0,150);
-            return JSON.stringify(prev)===JSON.stringify(limited) ? prev : limited;
-          }); }
+        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => { const limited=incoming.slice(0,150); return JSON.stringify(prev)===JSON.stringify(limited) ? prev : limited; }); }
       }
     } catch {}
   };
@@ -432,7 +423,10 @@ function App() {
     assign(target);
   };
 
-  const completeTask = (task: Task, auto = false) => {
+  const completeTask = async (task: Task, auto = false) => {
+    const evidenceUrl=task.driveUrl || (auto ? '' : window.prompt('Enter URL to actual deliverable or QA result:')?.trim());
+    if(!evidenceUrl){setNotice('Evidence is required to complete a task.');return;}
+
     const isKai = task.agentId === 'implement';
     const isLeo = task.agentId === 'developer';
 
@@ -443,18 +437,21 @@ function App() {
       return;
     }
 
-    // Persist this transition on the API. Rendering stays immediate, and local
-    // history remains visible if a legacy backend rejects the request.
-    void (async () => {
-      try {
-        const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`, {method:'PATCH'});
-        if(!response.ok) {
-          setNotice(`Completed locally; API did not save this task (HTTP ${response.status}).`);
-        }
-      } catch {
-        setNotice('Completed locally; server sync unavailable. Result remains in this browser.');
+    // Update the dashboard only after the server saved verified evidence.
+    try {
+      const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({evidenceUrl})
+      });
+      if(!response.ok) {
+        setNotice(`Task remains active; completion rejected (HTTP ${response.status}).`);
+        return;
       }
-    })();
+    } catch {
+      setNotice('API unavailable: task remains active until evidence can be saved.');
+      return;
+    }
 
     patchTask(task.id, {
       status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
