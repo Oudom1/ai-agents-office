@@ -621,26 +621,31 @@ app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
 });
 
 // Bulk-delete completed history only. Expected count avoids accidental stale-tab deletion.
-app.delete('/api/tasks/completed', requireAuth, (req,res)=>{
+app.delete('/api/tasks/completed', requireAuth, async (req,res)=>{
   const expected=Number(req.query.expectedCount);
   if(!Number.isSafeInteger(expected)||expected<0)return res.status(400).json({error:'Valid expectedCount is required'});
   const actual=tasks.filter(t=>t.status==='done').length;
   if(actual!==expected)return res.status(409).json({error:`Completed count changed (now ${actual}). Refresh before clearing.`,actualCount:actual});
+  const before=[...tasks];
   for(let i=tasks.length-1;i>=0;i--)if(tasks[i].status==='done')tasks.splice(i,1);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(0,tasks.length,...before);return res.status(503).json({error:'Database write failed'});}
   return res.json({ok:true,removedCount:actual,activePreserved:tasks.length});
 });
 
-app.delete('/api/tasks/:id', requireAuth, (req,res)=>{
+app.delete('/api/tasks/:id', requireAuth, async (req,res)=>{
   const index=tasks.findIndex(t=>t.id===req.params.id);
   if(index<0) return res.status(404).json({error:'Task not found'});
   const [removed]=tasks.splice(index,1);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(index,0,removed);return res.status(503).json({error:'Database write failed'});}
   const agent=agents.find(a=>a.id===removed.agentId);
   if(agent && (agent as any).currentTask===removed.title){agent.state='working'; delete (agent as any).currentTask;}
   res.json({ok:true,removed});
 });
 
-app.delete('/api/tasks', requireAuth, (_req,res)=>{
+app.delete('/api/tasks', requireAuth, async (_req,res)=>{
+  const before=[...tasks];
   tasks.splice(0,tasks.length);
+  try{await persistTaskHistory(tasks);}catch{tasks.splice(0,tasks.length,...before);return res.status(503).json({error:'Database write failed'});}
   agents.forEach(a=>{delete (a as any).currentTask;if(a.id!=='implement')a.state='working';});
   res.json({ok:true});
 });
