@@ -203,16 +203,7 @@ function App() {
       }
       if (t.ok) {
         const data = await t.json();
-        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => {
-            // Preserve completed results recorded in this browser, even if an older
-            // backend instance has not stored the PATCH /done transition yet.
-            const locallyDone=new Map(prev.filter(t=>t.status==='done').map(t=>[t.id,t]));
-            const merged=incoming.map((task:Task) => locallyDone.has(task.id) ? {...task,...locallyDone.get(task.id)!} : task);
-            const incomingIds=new Set(incoming.map((task:Task)=>task.id));
-            for(const local of locallyDone.values()) if(!incomingIds.has(local.id) && !clearedIds().has(local.id)) merged.push(local);
-            const limited=merged.slice(0,150);
-            return JSON.stringify(prev)===JSON.stringify(limited) ? prev : limited;
-          }); }
+        if (Array.isArray(data)) { const incoming=data.filter((task: Task) => !clearedIds().has(task.id)).map((t: Task) => normalizeKaiTask(t)); setTasks(prev => { const limited=incoming.slice(0,150); return JSON.stringify(prev)===JSON.stringify(limited) ? prev : limited; }); }
       }
     } catch {}
   };
