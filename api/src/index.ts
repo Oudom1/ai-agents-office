@@ -587,12 +587,13 @@ app.post('/api/agents/:agentId/state', requireAuth, (req,res)=>{
   res.json(agent);
 });
 
-app.post('/api/tasks', requireAuth, (req,res)=>{
+app.post('/api/tasks', requireAuth, async (req,res)=>{
   const {agentId,title,description=''}=req.body;
   const agent=agents.find(a=>a.id===agentId);
   if(!agent || !title) return res.status(400).json({error:'agentId and title are required'});
   const task:any={id:crypto.randomUUID(),agentId,title,description,status:'active',createdAt:new Date().toISOString()};
   tasks.unshift(task);
+  try { await persistTaskHistory(tasks); } catch { tasks.shift(); return res.status(503).json({error:'Could not save task'}); }
   agent.state='assigned-task';
   (agent as any).currentTask=title;
   (agent as any).destination=agent.home;
