@@ -312,26 +312,28 @@ app.post('/api/admin/users',requireAuth,async(req:any,res)=>{
 
 // Advance non-video office project tasks on the server so refreshes do not reset progress.
 function advanceOfficeTasks(){
-  // Never infer that a real deliverable exists merely because a timer expired.
-  // Scheduled responsibilities remain queued until a worker reports verifiable evidence.
+  // Prepare all unblocked assignments concurrently. A ready task is NOT
+  // executing and cannot be marked completed without a real deliverable.
   for (const agent of agents) {
-    if (agent.id === 'implement') continue;
-    const pending:any[] = tasks.filter(t=>t.agentId===agent.id && t.status!=='done')
-      .sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime());
-    const blocked = pending.find(t=>t.blocker);
-    const first = pending.find(t=>!t.blocker);
+    const pending:any[] = tasks.filter(t=>t.agentId===agent.id && t.status!=='done');
     for (const task of pending) {
-      if(task.phase==='working' || task.phase==='generating'){
-        task.phase = task.blocker ? 'blocked' : 'awaiting-execution';
-        task.resultMessage = task.blocker
-          ? 'Blocked — awaiting resolution before execution.'
-          : 'Assigned — awaiting an actual executor and verifiable output. No timed auto-completion.';
-      } else if(!task.phase || task.phase==='queued') {
-        task.phase=task.blocker?'blocked':'queued';
+      if (task.blocker) {
+        if(task.phase!=='blocked') task.phase='blocked';
+        continue;
+      }
+      // Keep an actual worker claim intact. Do not manufacture one.
+      if(task.phase==='executing') continue;
+      if(task.phase==='generating' && task.providerJobId) continue;
+      if(task.phase!=='ready') {
+        task.phase='ready';
+        task.resultMessage='Ready for parallel worker execution; awaiting an executor and verifiable output.';
       }
     }
-    const focus=first || blocked;
-    (agent as any).state=blocked && !first ? 'blocked' : focus ? 'assigned-task' : 'working';
+    const executing=pending.find(t=>t.phase==='executing');
+    const ready=pending.find(t=>t.phase==='ready');
+    const blocked=pending.find(t=>t.phase==='blocked');
+    const focus=executing||ready||blocked;
+    (agent as any).state=executing?'working-task':ready?'assigned-task':blocked?'blocked':'working';
     (agent as any).currentTask=focus?.title;
     (agent as any).destination=agent.home;
   }
