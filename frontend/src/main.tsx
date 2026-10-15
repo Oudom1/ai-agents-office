@@ -446,18 +446,21 @@ function App() {
       return;
     }
 
-    // Persist this transition on the API. Rendering stays immediate, and local
-    // history remains visible if a legacy backend rejects the request.
-    void (async () => {
-      try {
-        const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`, {method:'PATCH'});
-        if(!response.ok) {
-          setNotice(`Completed locally; API did not save this task (HTTP ${response.status}).`);
-        }
-      } catch {
-        setNotice('Completed locally; server sync unavailable. Result remains in this browser.');
+    // Update the dashboard only after the server saved verified evidence.
+    try {
+      const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({evidenceUrl})
+      });
+      if(!response.ok) {
+        setNotice(`Task remains active; completion rejected (HTTP ${response.status}).`);
+        return;
       }
-    })();
+    } catch {
+      setNotice('API unavailable: task remains active until evidence can be saved.');
+      return;
+    }
 
     patchTask(task.id, {
       status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
