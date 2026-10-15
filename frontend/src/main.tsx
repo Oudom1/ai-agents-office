@@ -190,6 +190,36 @@ function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
+  const exportTaskBackup = async () => {
+    // Preserve both server and browser records. Do not clear, overwrite, or modify either source.
+    let remote: Task[] = [];
+    let fetched=false;
+    try {
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),12000);
+      try {
+        const response=await authFetch(`${API}/tasks`,{signal:controller.signal});
+        if(response.ok) {
+          const data=await response.json();
+          if(Array.isArray(data)){remote=data;fetched=true;}
+        }
+      } finally {clearTimeout(timeout);}
+    } catch {}
+    const local=loadLocalTasks();
+    const records=new Map<string,Task>();
+    for(const t of local) if(t?.id)records.set(t.id,t);
+    for(const t of tasks) if(t?.id)records.set(t.id,t);
+    for(const t of remote) if(t?.id)records.set(t.id,t);
+    const backup={format:'ai-agents-office-task-backup',version:1,exportedAt:new Date().toISOString(),serverFetched:fetched,sourceCounts:{server:remote.length,browser:local.length,dashboard:tasks.length},tasks:[...records.values()]};
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=`ai-agents-office-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link);link.click();link.remove();
+    URL.revokeObjectURL(url);
+    setNotice(`Backup downloaded: ${records.size} tasks${fetched?' (server included)':' (server unavailable; browser only)'}.`);
+  };
+
   const refresh = async () => {
     try {
       const [a, t] = await Promise.all([authFetch(`${API}/agents`), authFetch(`${API}/tasks`)]);
@@ -637,7 +667,7 @@ function App() {
 
           <div className="panel tasks-panel"><div className="panel-title"><h2>Active Tasks</h2><span>{activeTasks.length} running / queued</span></div>{activeTasks.length === 0 ? <p className="muted">No active tasks</p> : activeTasks.slice(0,showAllTasks?60:8).map(t => <ActiveTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} now={now} onComplete={() => completeTask(t)} onBlocker={() => toggleBlocker(t)} />)}{activeTasks.length>8&&<button type="button" className="secondary" onClick={()=>setShowAllTasks(v=>!v)}>{showAllTasks?'Show fewer tasks':`Show more (${activeTasks.length})`}</button>}</div>
 
-          <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><div className="results-header-actions"><button type="button" className="clear-completed-btn" onClick={clearDone} disabled={clearingCompleted || doneTasks.length === 0}>{clearingCompleted ? "Clearing…" : "🗑 Clear Completed"}</button><span>{doneTasks.length} complete</span></div></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0,30).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
+          <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><div className="results-header-actions"><button type="button" className="clear-completed-btn" onClick={()=>void exportTaskBackup()} title="Download task backup without deleting any data">⬇ Backup Tasks</button><button type="button" className="clear-completed-btn" onClick={clearDone} disabled={clearingCompleted || doneTasks.length === 0}>{clearingCompleted ? "Clearing…" : "🗑 Clear Completed"}</button><span>{doneTasks.length} complete</span></div></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0,30).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
         </aside>
       </main>
       {showTypingTool && <div onClick={() => setShowTypingTool(false)} style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(2,8,18,.86)',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px'}}><div onClick={e => e.stopPropagation()} style={{width:'min(1500px,96vw)',height:'min(920px,92vh)',background:'#081523',border:'1px solid #294b68',borderRadius:'14px',boxShadow:'0 24px 80px rgba(0,0,0,.55)',overflow:'hidden',display:'flex',flexDirection:'column'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #294b68',background:'#0d1d2d'}}><div><b style={{color:'#e9f7ff'}}>⌨ Leo Typing Tool</b><span style={{marginLeft:'10px',fontSize:'11px',color:'#6f8ca5'}}>Integrated training workspace</span></div><div style={{display:'flex',gap:'8px'}}><a href={TYPING_TOOL_URL} target="_blank" rel="noreferrer" style={{padding:'7px 10px',border:'1px solid #315878',borderRadius:'7px',color:'#bfe9ff',textDecoration:'none',fontSize:'11px'}}>Open Full Screen ↗</a><button onClick={() => setShowTypingTool(false)} style={{padding:'7px 11px',background:'#35121d',border:'1px solid #8f3d4b',borderRadius:'7px',color:'#ffd8e1'}}>Close</button></div></div><iframe title="Leo Typing Tool" src={TYPING_TOOL_URL} style={{width:'100%',height:'100%',border:0,background:'#07111c'}} allow="clipboard-read; clipboard-write" /></div></div>}
