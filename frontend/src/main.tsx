@@ -432,7 +432,10 @@ function App() {
     assign(target);
   };
 
-  const completeTask = (task: Task, auto = false) => {
+  const completeTask = async (task: Task, auto = false) => {
+    const evidenceUrl=task.driveUrl || (auto ? '' : window.prompt('Enter URL to actual deliverable or QA result:')?.trim());
+    if(!evidenceUrl){setNotice('Evidence is required to complete a task.');return;}
+
     const isKai = task.agentId === 'implement';
     const isLeo = task.agentId === 'developer';
 
