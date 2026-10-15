@@ -453,7 +453,7 @@ function App() {
     assign(target);
   };
 
-  const completeTask = (task: Task, auto = false) => {
+  const completeTask = async (task: Task, auto = false) => {
     const isKai = false;
     const isLeo = task.agentId === 'developer';
 
@@ -464,18 +464,19 @@ function App() {
       return;
     }
 
-    // Persist this transition on the API. Rendering stays immediate, and local
-    // history remains visible if a legacy backend rejects the request.
-    void (async () => {
-      try {
-        const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`, {method:'PATCH'});
-        if(!response.ok) {
-          setNotice(`Completed locally; API did not save this task (HTTP ${response.status}).`);
-        }
-      } catch {
-        setNotice('Completed locally; server sync unavailable. Result remains in this browser.');
+    // Server confirmation is required: never display false completion.
+    try {
+      const response = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`, {method:'PATCH'});
+      if (!response.ok) {
+        setNotice(response.status===404
+          ? 'Task is missing from the server. Back up your tasks; this assignment needs to be synchronized.'
+          : `Completion was rejected by the server (HTTP ${response.status}). Task remains open.`);
+        return;
       }
-    })();
+    } catch {
+      setNotice('Cannot reach the backend. Task remains open; please retry.');
+      return;
+    }
 
     patchTask(task.id, {
       status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
