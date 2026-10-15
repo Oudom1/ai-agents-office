@@ -542,6 +542,8 @@ app.get('/api/video/providers', requireAuth, (_req,res)=>{
 });
 
 app.post('/api/video/generate', requireAuth, async (req:any,res)=>{
+  // Video generation was retired for Kai; historical task data is preserved.
+  return res.status(410).json({error:'Kai video generation is retired. Assign implementation and verification tasks instead.'});
   const prompt=String(req.body?.prompt||'').trim();
   const taskId=String(req.body?.taskId||'').trim();
   if(!prompt) return res.status(400).json({error:'prompt is required'});
