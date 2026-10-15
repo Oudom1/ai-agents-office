@@ -120,11 +120,9 @@ function makeItComedyPrompt() {
 }
 
 function normalizeKaiTask(t: Task): Task {
-  if (t.agentId !== 'implement') return t;
-  const phase=String(t.phase || '');
-  const hasRealProviderState = Boolean(t.providerJobId) || ['starting','generating','completed','provider-error'].includes(phase) || t.provider === 'Hugging Face ZeroGPU LTX Video Fast';
-  if (hasRealProviderState) return {...t, freeOnly: true};
-  return {...t, provider:'Hugging Face ZeroGPU LTX Video Fast', freeOnly:true, phase:'provider-error', blocker:t.blocker || 'Legacy Free Video Router task detected. It is not actively generating. Retry Kai to start LTX.', resultMessage:t.resultMessage || 'Waiting stopped — no provider job was started for this old task.'};
+  // Retain historical video records unchanged, but never route new implementation
+  // tasks through the retired video provider or invent a provider blocker.
+  return t;
 }
 
 function loadLocalTasks(): Task[] {
@@ -358,7 +356,7 @@ function App() {
   };
 
   const addLocalTask = (agentId: string, title: string) => {
-    const isKai = agentId === 'implement';
+    const isKai = false; // New implementation assignments must never start video generation.
     const isLeo = agentId === 'developer';
     const kaiBlocked = isKai && !KAI_FREE_VIDEO_AVAILABLE;
     const id = crypto.randomUUID();
@@ -435,13 +433,6 @@ function App() {
     const title = taskTitle.trim();
     const targetAgent = forcedAgentId ?? selected;
 
-    if (targetAgent === 'implement') {
-      setTaskTitle('');
-      setSelected(targetAgent);
-      await startKaiProviderTask(title);
-      return;
-    }
-
     try {
       const r = await authFetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
@@ -463,10 +454,10 @@ function App() {
   };
 
   const completeTask = (task: Task, auto = false) => {
-    const isKai = task.agentId === 'implement';
+    const isKai = false;
     const isLeo = task.agentId === 'developer';
 
-    if (isKai && !task.driveUrl) {
+    if (isKai && task.providerJobId && !task.driveUrl) {
       patchTask(task.id, {status:'active',phase:task.providerJobId ? 'generating' : 'provider-error',blocker:task.providerJobId ? undefined : 'No active provider job. Retry Kai to start LTX.',completedAt:undefined,resultMessage:task.providerJobId ? 'Hugging Face ZeroGPU LTX Video Fast is generating the real MP4...' : KAI_PROVIDER_PENDING,nextRunAt:undefined});
       updateLocal('implement', {state: 'working', currentTask: task.title});
       setNotice(task.providerJobId ? 'Kai is still generating the real MP4.' : 'Kai is not generating. Retry the task to start LTX.');
@@ -582,9 +573,9 @@ function App() {
     : '';
   const kaiStatusText = kaiLatestTask
     ? (kaiLatestTask.resultMessage || `Kai status: ${kaiLatestTask.phase || kaiLatestTask.status}`)
-    : 'Kai has no video task yet.';
+    : 'Kai is ready for implementation and verification tasks.';
 
-  const selectedPlaceholder = selected === 'implement' ? 'Give Kai a comedy cartoon video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
+  const selectedPlaceholder = selected === 'implement' ? 'Assign implementation, verification or integration work to Kai...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
   if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
@@ -686,7 +677,7 @@ function ActiveTaskCard({task, agentName, now, onComplete, onBlocker}: {task: Ta
 function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) { return <div className="result-card"><div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div><b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p><p className="result-duration-native">⏱ Time spent: {taskElapsed(task)}</p><div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>{task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}{task.videoUrl && <a className="result-link" href={task.videoUrl} target="_blank" rel="noreferrer">Open Final MP4</a>}{task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}</div>; }
 
 function friendlyState(state: string) { if (state === 'assigned-task') return 'assigned'; if (state === 'working-task') return 'working'; if (state === 'off-duty') return 'resting'; if (state === 'snack') return 'snack break'; return state; }
-function friendlyPhase(phase?: string) { if (phase === 'starting') return 'Connecting'; if (phase === 'generating') return 'Generating'; if (phase === 'merging') return 'Merging'; if (phase === 'uploading') return 'Uploading'; if (phase === 'provider-error') return 'Retry Provider'; if (phase === 'free-check') return 'Free Check'; if (phase === 'received') return 'Received'; if (phase === 'preparing') return 'Preparing'; if (phase === 'working') return 'Working'; if (phase === 'completed') return 'Completed'; return 'Queued'; }
+function friendlyPhase(phase?: string) { if (phase === 'starting') return 'Connecting'; if (phase === 'generating') return 'Generating'; if (phase === 'merging') return 'Merging'; if (phase === 'uploading') return 'Uploading'; if (phase === 'provider-error') return 'Retry Provider'; if (phase === 'free-check') return 'Free Check'; if (phase === 'received') return 'Received'; if (phase === 'preparing') return 'Preparing'; if (phase === 'working') return 'Working'; if (phase === 'completed') return 'Completed'; if (phase === 'ready' || phase === 'awaiting-execution') return 'Ready · Parallel'; if (phase === 'executing') return 'Executing'; if (phase === 'blocked') return 'Blocked'; return 'Queued'; }
 function timeAgo(value: string) { const s = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (s < 60) return `${s}s ago`; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; return `${Math.floor(m / 60)}h ago`; }
 function getRemainingSeconds(task: Task, now: number) { if (!task.startedAt || !task.durationSec) return task.durationSec ?? 0; const elapsed = Math.floor((now - new Date(task.startedAt).getTime()) / 1000); return Math.max(0, task.durationSec - elapsed); }
 function getProgressPercent(task: Task, now: number) { if (!task.durationSec) return task.phase === 'working' ? 65 : task.phase === 'preparing' ? 35 : 12; if (!task.startedAt) return task.phase === 'preparing' ? 28 : task.phase === 'free-check' ? 8 : task.phase === 'received' ? 16 : 4; const elapsed = Math.max(0, Math.floor((now - new Date(task.startedAt).getTime()) / 1000)); return Math.max(4, Math.min(100, Math.round((elapsed / task.durationSec) * 100))); }
