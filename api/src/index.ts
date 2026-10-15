@@ -600,13 +600,23 @@ app.post('/api/tasks', requireAuth, async (req,res)=>{
   res.status(201).json(task);
 });
 
-app.patch('/api/tasks/:id/done', requireAuth, (req,res)=>{
-  const task=tasks.find(t=>t.id===req.params.id);
-  if(!task) return res.status(404).json({error:'Task not found'});
-  task.status='done';
-  task.completedAt=new Date().toISOString();
+app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task)return res.status(404).json({error:'Task not found'});
+  if(task.status==='done')return res.json(task);
+  const evidence=typeof req.body?.evidenceUrl==='string' ? req.body.evidenceUrl.trim() : '';
+  let verified:URL;
+  try {
+    verified=new URL(evidence);
+    if(!['https:','http:'].includes(verified.protocol))throw Error('Unsupported URL');
+  } catch {return res.status(422).json({error:'Completion requires an evidenceUrl for the real deliverable or QA result'});}
+  const prior={...task};
+  task.status='done';task.phase='completed';task.completedAt=new Date().toISOString();
+  task.evidenceUrl=verified.toString();
+  task.resultMessage='Completed with linked deliverable evidence.';
+  try{await persistTaskHistory(tasks);}catch{Object.assign(task,prior);return res.status(503).json({error:'Database save failed'});}
   const agent=agents.find(a=>a.id===task.agentId);
-  if(agent){agent.state='working'; delete (agent as any).currentTask; (agent as any).destination=agent.home;}
+  if(agent){agent.state='working';delete (agent as any).currentTask;(agent as any).destination=agent.home;}
   res.json(task);
 });
 
