@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
+import { initializeTaskHistory, persistTaskHistory } from './task-history.js';
 import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog } from './auth-store.js';
 
 const app = express();
@@ -336,6 +337,7 @@ function advanceOfficeTasks(){
     (agent as any).destination=agent.home;
   }
 }
+await initializeTaskHistory(tasks);
 advanceOfficeTasks();
 setInterval(advanceOfficeTasks,5000);
 
