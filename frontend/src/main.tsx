@@ -358,7 +358,7 @@ function App() {
   };
 
   const addLocalTask = (agentId: string, title: string) => {
-    const isKai = agentId === 'implement';
+    const isKai = false; // New implementation assignments must never start video generation.
     const isLeo = agentId === 'developer';
     const kaiBlocked = isKai && !KAI_FREE_VIDEO_AVAILABLE;
     const id = crypto.randomUUID();
@@ -435,13 +435,6 @@ function App() {
     const title = taskTitle.trim();
     const targetAgent = forcedAgentId ?? selected;
 
-    if (targetAgent === 'implement') {
-      setTaskTitle('');
-      setSelected(targetAgent);
-      await startKaiProviderTask(title);
-      return;
-    }
-
     try {
       const r = await authFetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
@@ -463,10 +456,10 @@ function App() {
   };
 
   const completeTask = (task: Task, auto = false) => {
-    const isKai = task.agentId === 'implement';
+    const isKai = false;
     const isLeo = task.agentId === 'developer';
 
-    if (isKai && !task.driveUrl) {
+    if (isKai && task.providerJobId && !task.driveUrl) {
       patchTask(task.id, {status:'active',phase:task.providerJobId ? 'generating' : 'provider-error',blocker:task.providerJobId ? undefined : 'No active provider job. Retry Kai to start LTX.',completedAt:undefined,resultMessage:task.providerJobId ? 'Hugging Face ZeroGPU LTX Video Fast is generating the real MP4...' : KAI_PROVIDER_PENDING,nextRunAt:undefined});
       updateLocal('implement', {state: 'working', currentTask: task.title});
       setNotice(task.providerJobId ? 'Kai is still generating the real MP4.' : 'Kai is not generating. Retry the task to start LTX.');
@@ -582,9 +575,9 @@ function App() {
     : '';
   const kaiStatusText = kaiLatestTask
     ? (kaiLatestTask.resultMessage || `Kai status: ${kaiLatestTask.phase || kaiLatestTask.status}`)
-    : 'Kai has no video task yet.';
+    : 'Kai is ready for implementation and verification tasks.';
 
-  const selectedPlaceholder = selected === 'implement' ? 'Give Kai a comedy cartoon video task...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
+  const selectedPlaceholder = selected === 'implement' ? 'Assign implementation, verification or integration work to Kai...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
 
   if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
