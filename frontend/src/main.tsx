@@ -120,11 +120,9 @@ function makeItComedyPrompt() {
 }
 
 function normalizeKaiTask(t: Task): Task {
-  if (t.agentId !== 'implement') return t;
-  const phase=String(t.phase || '');
-  const hasRealProviderState = Boolean(t.providerJobId) || ['starting','generating','completed','provider-error'].includes(phase) || t.provider === 'Hugging Face ZeroGPU LTX Video Fast';
-  if (hasRealProviderState) return {...t, freeOnly: true};
-  return {...t, provider:'Hugging Face ZeroGPU LTX Video Fast', freeOnly:true, phase:'provider-error', blocker:t.blocker || 'Legacy Free Video Router task detected. It is not actively generating. Retry Kai to start LTX.', resultMessage:t.resultMessage || 'Waiting stopped — no provider job was started for this old task.'};
+  // Retain historical video records unchanged, but never route new implementation
+  // tasks through the retired video provider or invent a provider blocker.
+  return t;
 }
 
 function loadLocalTasks(): Task[] {
