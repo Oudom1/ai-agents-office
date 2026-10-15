@@ -620,6 +620,21 @@ app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
   res.json(task);
 });
 
+// Workers must explicitly claim assignments; a claim never implies completion.
+app.post('/api/tasks/:id/claim', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task)return res.status(404).json({error:'Task not found'});
+  if(task.status==='done' || task.blocker)return res.status(409).json({error:'Task cannot be claimed'});
+  if(task.phase==='executing')return res.status(409).json({error:'Already claimed'});
+  const worker=typeof req.body?.worker==='string' ? req.body.worker.trim().slice(0,120) : '';
+  if(!worker)return res.status(400).json({error:'Worker name is required'});
+  const prior={...task};
+  task.phase='executing';task.worker=worker;task.startedAt=new Date().toISOString();
+  task.resultMessage='Claimed by '+worker+'; deliverable evidence is required before completion.';
+  try{await persistTaskHistory(tasks);}catch{Object.assign(task,prior);return res.status(503).json({error:'Database write failed'});}
+  return res.json(task);
+});
+
 // Bulk-delete completed history only. Expected count avoids accidental stale-tab deletion.
 app.delete('/api/tasks/completed', requireAuth, async (req,res)=>{
   const expected=Number(req.query.expectedCount);
