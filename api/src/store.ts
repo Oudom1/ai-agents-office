@@ -163,6 +163,7 @@ const patchTasks = Object.entries(patchPortalTitles).flatMap(([agentId,titles], 
     titles, 300000 + groupIndex * 50000, agentId === 'developer' ? 3600 : 2400)
 );
 
-export const tasks:any[] = [...alexTasks, ...leoTasks, ...samTasks, ...linaTasks, ...minaTasks, ...noahTasks, ...patchTasks];
+// Task board reset requested 2026-10-17; new tasks are added through the API.
+export const tasks:any[] = [];
 
 export const startedAt = new Date().toISOString();
