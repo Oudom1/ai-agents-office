@@ -28,7 +28,7 @@ const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '1SDKs0stvo
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/,'');
 const SESSION_TTL_HOURS = Number(process.env.SESSION_TTL_HOURS || 8);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://oudom1.github.io,http://localhost:5173')
-  .split(',').map(v=>v.trim()).filter(Boolean);
+  .split(',').map(v=>v.trim()).filter(Boolean).concat('https://ai-agents-office-frontend-production.up.railway.app');
 
 const sessions = new Map<string,{user:string,expiresAt:number}>();
 const loginAttempts = new Map<string,{count:number,windowStart:number}>();
