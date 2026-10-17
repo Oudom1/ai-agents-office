@@ -50,8 +50,8 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   return fetch(input, {...init, headers, cache: 'no-store'});
 }
 const TASK_TARGET = 12;
-const STORAGE_KEY = 'ai-agents-office-tasks-v3';
-const CLEARED_RESULTS_KEY = 'ai-agents-office-cleared-results-v1';
+const STORAGE_KEY = 'ai-agents-office-tasks-v4'; // New empty task board; preserve old v3 only as a historical browser backup.
+const CLEARED_RESULTS_KEY = 'ai-agents-office-cleared-results-v2';
 function clearedIds(): Set<string> { try { const value=JSON.parse(localStorage.getItem(CLEARED_RESULTS_KEY)||'[]'); return new Set(Array.isArray(value)?value:[]); } catch { return new Set(); } }
 function markCleared(ids:string[]) { const all=clearedIds(); ids.forEach(id=>all.add(id)); try { localStorage.setItem(CLEARED_RESULTS_KEY,JSON.stringify([...all].slice(-2000))); } catch {} }
 
