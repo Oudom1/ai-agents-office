@@ -1,4 +1,5 @@
 import express from 'express';
+import { registerPatchResearch } from './patch-research.js';
 import cors from 'cors';
 import { randomBytes, timingSafeEqual, createECDH, hkdfSync, createDecipheriv } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -635,5 +636,7 @@ app.delete('/api/tasks', requireAuth, (_req,res)=>{
   agents.forEach(a=>{delete (a as any).currentTask;if(a.id!=='implement')a.state='working';});
   res.json({ok:true});
 });
+
+registerPatchResearch(app, requireAuth);
 
 app.listen(port,'0.0.0.0',()=>console.log(`AI Agents Office API running on port ${port}`));
