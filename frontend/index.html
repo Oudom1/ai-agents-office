@@ -40,13 +40,13 @@
   <script src="./mobile-performance-fix.js?v=20261006-1"></script>
   <script type="module">
     (async()=>{
-      const API='https://ai-agents-office-production.up.railway.app/api';
+      const API='https://ai-agents-office-api-v2.onrender.com/api';
       const TOKEN_KEY='ai-office-auth-token-v1';
       const msg=document.getElementById('session-msg');
       const actions=document.getElementById('session-actions');
       const retryBtn=document.getElementById('session-retry');
       const loginBtn=document.getElementById('session-login');
-      const goToLogin=()=>location.replace('./login-diagnostic.html?v=railway4');
+      const goToLogin=()=>location.replace('./login-diagnostic.html?v=render-v3');
 
       loginBtn.onclick=goToLogin;
 
