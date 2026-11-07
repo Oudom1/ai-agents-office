@@ -178,6 +178,8 @@ function App() {
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showSocialOffice, setShowSocialOffice] = useState(false);
   const [progressLightsEnabled, setProgressLightsEnabled] = useState(true);
+  const [activeView, setActiveView] = useState<'office'|'projects'|'tasks'|'activity'|'health'>('office');
+  const [systemHealth, setSystemHealth] = useState<{api:'checking'|'online'|'offline';db:'checking'|'online'|'offline';checkedAt?:string}>({api:'checking',db:'checking'});
 
   useEffect(() => {
     void cleanTemporaryOfficeCache();
@@ -187,6 +189,26 @@ function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
+
+  const checkSystemHealth = async () => {
+    setSystemHealth(prev => ({...prev, api:'checking', db:'checking'}));
+    try {
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),8000);
+      const response=await fetch(`${API}/health`,{cache:'no-store',signal:controller.signal});
+      clearTimeout(timer);
+      const data=await response.json().catch(()=>({}));
+      setSystemHealth({
+        api: response.ok && data?.ok ? 'online' : 'offline',
+        db: data?.databaseConfigured ? 'online' : 'offline',
+        checkedAt:new Date().toISOString()
+      });
+    } catch {
+      setSystemHealth({api:'offline',db:'offline',checkedAt:new Date().toISOString()});
+    }
+  };
+
+  useEffect(() => { void checkSystemHealth(); }, []);
 
   const exportTaskBackup = async () => {
     // Preserve both server and browser records. Do not clear, overwrite, or modify either source.
@@ -588,7 +610,73 @@ function App() {
       </header>
 
       <main>
-        <section className="office-card">
+        <nav className="ops-nav" aria-label="AI Agents Office sections">
+          {([
+            ['office','🏢 Office'],
+            ['projects','◫ Projects'],
+            ['tasks','☷ Tasks'],
+            ['activity','◉ Agent Activity'],
+            ['health','✚ System Health']
+          ] as const).map(([key,label])=><button key={key} type="button" className={`ops-nav-btn ${activeView===key?'active':''}`} onClick={()=>setActiveView(key)}>{label}</button>)}
+        </nav>
+
+        {activeView==='projects' && <section className="ops-view">
+          <div className="ops-view-head"><div><span className="ops-kicker">PROJECT ROOMS</span><h2>Operational Workstreams</h2><p>Group requests by business area, then hand work to the right specialist agent.</p></div><span className="ops-badge">{activeTasks.length} active tasks</span></div>
+          <div className="project-room-grid">
+            {[
+              {icon:'◈',name:'SAP / InfraCo',desc:'S/4HANA, Fiori, Basis, transports, company-code implementation',keywords:/sap|s4|fiori|infraco|transport|hana/i,owner:'Sam + Leo'},
+              {icon:'◆',name:'M365 / Entra',desc:'AD, Entra ID, Intune, Exchange, SharePoint and identity operations',keywords:/entra|intune|exchange|sharepoint|onedrive|active directory|\bad\b/i,owner:'Sam'},
+              {icon:'⬡',name:'Security',desc:'IAM, vulnerabilities, logs, access review and security validation',keywords:/security|cve|iam|vulnerability|graylog|audit|mfa/i,owner:'Mina'},
+              {icon:'▤',name:'Patch Management',desc:'Patch analysis, CVEs, deployment readiness and endpoint operations',keywords:/patch|kb\d|cve|manageengine/i,owner:'Sam + Mina'},
+              {icon:'⌘',name:'AI Marketplace',desc:'Marketplace development, payment integration, QA and deployment',keywords:/marketplace|payway|payment|checkout/i,owner:'Leo + Lina + Mina'},
+              {icon:'✦',name:'Career & Automation',desc:'Portfolio, Google career roadmap, automation and agent-office improvements',keywords:/portfolio|career|google|automation|agent|office/i,owner:'Leo + Kai'}
+            ].map(room=>{
+              const roomTasks=tasks.filter(t=>room.keywords.test(t.title));
+              const active=roomTasks.filter(t=>t.status!=='done').length;
+              const completed=roomTasks.filter(t=>t.status==='done').length;
+              return <article className="project-room" key={room.name}><div className="project-room-icon">{room.icon}</div><div><h3>{room.name}</h3><p>{room.desc}</p><div className="project-room-meta"><span>Owner: {room.owner}</span><span>{active} active · {completed} done</span></div></div></article>
+            })}
+          </div>
+        </section>}
+
+        {activeView==='tasks' && <section className="ops-view">
+          <div className="ops-view-head"><div><span className="ops-kicker">DELIVERY PIPELINE</span><h2>Task Control Center</h2><p>Track work from assignment through evidence, review and completion.</p></div><button type="button" className="ops-refresh" onClick={()=>void refresh()}>↻ Refresh</button></div>
+          <div className="task-pipeline">
+            {[
+              {key:'todo',label:'Assigned',match:(t:Task)=>t.status!=='done'&&!t.blocker&&['queued','active',undefined].includes(t.phase)},
+              {key:'work',label:'Working',match:(t:Task)=>t.status!=='done'&&!t.blocker&&!['queued','active',undefined].includes(t.phase)},
+              {key:'blocked',label:'Blocked',match:(t:Task)=>t.status!=='done'&&(!!t.blocker||t.status==='blocked')},
+              {key:'done',label:'Completed',match:(t:Task)=>t.status==='done'}
+            ].map(col=><div className="task-pipeline-col" key={col.key}><div className="task-pipeline-title"><b>{col.label}</b><span>{tasks.filter(col.match).length}</span></div>{tasks.filter(col.match).slice(0,20).map(t=><article className="ops-task-card" key={t.id}><div className="ops-task-agent">{agents.find(a=>a.id===t.agentId)?.name||'Agent'} · {t.phase||t.status}</div><h4>{t.title}</h4>{t.blocker&&<p className="ops-task-blocker">⚠ {t.blocker}</p>}<div className="ops-task-evidence">{t.driveUrl&&<a href={t.driveUrl} target="_blank" rel="noreferrer">Drive evidence</a>}{t.videoUrl&&<a href={t.videoUrl} target="_blank" rel="noreferrer">Output</a>}{!t.driveUrl&&!t.videoUrl&&<span>Evidence pending</span>}</div></article>)}{!tasks.some(col.match)&&<div className="ops-empty">No tasks</div>}</div>)}
+          </div>
+        </section>}
+
+        {activeView==='activity' && <section className="ops-view">
+          <div className="ops-view-head"><div><span className="ops-kicker">LIVE ACTIVITY</span><h2>Agent Work Queues</h2><p>See what each specialist is doing, their blockers, and their latest deliverables.</p></div><span className="ops-badge">{workerAgents.length} specialists</span></div>
+          <div className="activity-grid">{workerAgents.map(a=>{
+            const assigned=tasks.filter(t=>t.agentId===a.id);
+            const current=assigned.find(t=>t.status!=='done');
+            const latestDone=assigned.find(t=>t.status==='done');
+            return <article className="activity-card" key={a.id} onClick={()=>{setSelected(a.id);setActiveView('office')}}><div className="activity-card-head"><div className={`activity-avatar avatar-${a.id}`}><OfficePortrait role={a.id}/></div><div><h3>{a.name}</h3><p>{a.role}</p></div><span className={`activity-state state-${a.state}`}>{friendlyState(a.state)}</span></div><div className="activity-detail"><span>Current task</span><b>{current?.title||a.currentTask||'No active assignment'}</b></div><div className="activity-detail"><span>Next step</span><b>{current?.blocker?'Resolve blocker':current?'Continue execution / provide evidence':'Ready for assignment'}</b></div><div className="activity-detail"><span>Latest completed</span><b>{latestDone?.title||'No completed task yet'}</b></div><div className="activity-foot">{assigned.filter(t=>t.status!=='done').length} active · {assigned.filter(t=>t.status==='done').length} completed</div></article>
+          })}</div>
+        </section>}
+
+        {activeView==='health' && <section className="ops-view">
+          <div className="ops-view-head"><div><span className="ops-kicker">SYSTEM HEALTH</span><h2>Platform & Integration Status</h2><p>Fast visibility into the services that keep the AI Agents Office operational.</p></div><button type="button" className="ops-refresh" onClick={()=>void checkSystemHealth()}>Run health check</button></div>
+          <div className="health-grid">
+            {[
+              {name:'GitHub Pages',detail:'Frontend / static office',state:'online' as const},
+              {name:'Office API',detail:API_BASE,state:systemHealth.api},
+              {name:'Neon PostgreSQL',detail:'Users, security logs and office data',state:systemHealth.db},
+              {name:'Authentication',detail:'ECDH + AES-GCM secure session',state:systemHealth.api},
+              {name:'Google Drive',detail:'Deliverable storage integration',state:'checking' as const},
+              {name:'Hugging Face',detail:'Kai media generation provider',state:'checking' as const}
+            ].map(s=><article className="health-card" key={s.name}><div className={`health-dot health-${s.state}`}/><div><h3>{s.name}</h3><p>{s.detail}</p></div><strong>{s.state==='online'?'ONLINE':s.state==='offline'?'OFFLINE':'CHECK'}</strong></article>)}
+          </div>
+          <div className="health-note">Last API/DB check: {systemHealth.checkedAt?new Date(systemHealth.checkedAt).toLocaleString():'not checked yet'}. External integrations marked CHECK require provider-specific verification.</div>
+        </section>}
+
+        <section className={`office-card ${activeView==='office'?'':'ops-hidden'}`}>
           <div className="office office-v2 office-v3 office-approved">
             <div className="office-v3-head"><div className="approved-header-copy"><span className="approved-building" aria-hidden="true">🏙️</span><span className="office-eyebrow">AI AGENTS OFFICE</span><h2>Virtual Office Workflow</h2><p>From task assignment to delivery · Select an agent to manage their work</p></div><div className="office-v3-online"><i/> {workerAgents.length} specialist agents · {activeTasks.length} unfinished <button type="button" className="office-reload" onClick={()=>void refresh()}>↻ Refresh</button></div></div>
             <div className="office-task-summary" aria-label="Task dashboard summary">
