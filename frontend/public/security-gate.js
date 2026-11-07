@@ -1,5 +1,5 @@
 (()=>{
-  const API='https://ai-agents-office-production.up.railway.app/api';
+  const API='https://ai-agents-office-api-v2.onrender.com/api';
   const TOKEN_KEY='ai-office-auth-token-v1';
   const USER_KEY='ai-office-auth-user-v1';
   const rawFetch=window.fetch.bind(window);
