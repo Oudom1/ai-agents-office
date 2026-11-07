@@ -180,6 +180,8 @@ function App() {
   const [progressLightsEnabled, setProgressLightsEnabled] = useState(true);
   const [activeView, setActiveView] = useState<'office'|'projects'|'tasks'|'activity'|'health'>('office');
   const [systemHealth, setSystemHealth] = useState<{api:'checking'|'online'|'offline';db:'checking'|'online'|'offline';checkedAt?:string}>({api:'checking',db:'checking'});
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
 
   useEffect(() => {
     void cleanTemporaryOfficeCache();
@@ -600,17 +602,43 @@ function App() {
 
   const selectedPlaceholder = selected === 'implement' ? 'Assign implementation, verification or integration work to Kai...' : selected === 'developer' ? 'Ask Leo to build or improve your portfolio...' : 'Assign a task...';
   const selectedButton = selected === 'implement' ? 'Send Task to Kai' : selected === 'developer' ? 'Send Task to Leo' : 'Assign Task';
+  const selectedAgent = agents.find(a=>a.id===selected) || workerAgents[0];
+  const selectedAgentTasks = selectedAgent ? tasks.filter(t=>t.agentId===selectedAgent.id) : [];
+  const selectedAgentActive = selectedAgentTasks.filter(t=>t.status!=='done');
+  const selectedAgentDone = selectedAgentTasks.filter(t=>t.status==='done');
+  const searchResults = globalSearch.trim() ? [
+    ...tasks.filter(t=>t.title.toLowerCase().includes(globalSearch.toLowerCase())).slice(0,5).map(t=>({kind:'Task',label:t.title,agentId:t.agentId})),
+    ...agents.filter(a=>(a.name+' '+a.role).toLowerCase().includes(globalSearch.toLowerCase())).slice(0,5).map(a=>({kind:'Agent',label:`${a.name} · ${a.role}`,agentId:a.id}))
+  ] : [];
 
   if (showSocialOffice) return <SocialOffice onBack={() => setShowSocialOffice(false)} />;
   return (
-    <div className="app">
-      <header>
-        <div><h1>AI AGENTS OFFICE</h1><p>Live multi-agent operations floor</p></div>
-        <div className="header-actions"><button type="button" style={{width:"auto",margin:0,background:"#e8f3ff",color:"#146fd0"}} onClick={()=>setShowSocialOffice(true)}>✦ Social Office</button><div className="status"><span className="dot" /> SYSTEM ONLINE</div>{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'560px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
+    <div className="app ops-shell">
+      <aside className="ops-sidebar">
+        <div className="ops-brand"><span className="ops-brand-mark">AI</span><div><b>Agents Office</b><small>Control Center</small></div></div>
+        <div className="ops-side-group">
+          {([
+            ['office','🏢','Office'],
+            ['projects','◫','Projects'],
+            ['tasks','☷','Tasks'],
+            ['activity','◉','Activity'],
+            ['health','✚','System Health']
+          ] as const).map(([key,icon,label])=><button key={key} type="button" className={`ops-side-btn ${activeView===key?'active':''}`} onClick={()=>setActiveView(key)}><span>{icon}</span>{label}</button>)}
+        </div>
+        <div className="ops-side-spacer"/>
+        <button type="button" className="ops-side-btn" onClick={()=>setShowSocialOffice(true)}><span>✦</span>Social Office</button>
+        <div className="ops-side-status"><span className="dot"/> Connected</div>
+      </aside>
+      <div className="ops-main-shell">
+      <header className="ops-commandbar">
+        <div className="ops-command-title"><h1>AI AGENTS OFFICE</h1><p>Live multi-agent operations floor</p></div>
+        <div className="ops-search-wrap"><span>⌕</span><input value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} placeholder="Search agents or tasks…" />{searchResults.length>0&&<div className="ops-search-results">{searchResults.map((r,i)=><button key={i} type="button" onClick={()=>{setSelected(r.agentId);setAgentDrawerOpen(true);setGlobalSearch('')}}><small>{r.kind}</small><span>{r.label}</span></button>)}</div>}</div>
+        <div className="ops-command-metrics"><span><b>{activeTasks.length}</b> Active</span><span className={blockers.length?'warn':''}><b>{blockers.length}</b> Blocked</span><span className="ok"><i className="dot"/> Online</span></div>
+        <div className="header-actions">{kaiProblem && <div className="toast" style={{background:'#4b1020',border:'1px solid #ff4772',color:'#ffd8e1',maxWidth:'420px'}}>⚠ Kai: {kaiProblem}</div>}{notice && <div className="toast">{notice}</div>}</div>
       </header>
 
       <main>
-        <nav className="ops-nav" aria-label="AI Agents Office sections">
+        <nav className="ops-nav ops-nav-legacy" aria-label="AI Agents Office sections">
           {([
             ['office','🏢 Office'],
             ['projects','◫ Projects'],
@@ -657,7 +685,7 @@ function App() {
             const assigned=tasks.filter(t=>t.agentId===a.id);
             const current=assigned.find(t=>t.status!=='done');
             const latestDone=assigned.find(t=>t.status==='done');
-            return <article className="activity-card" key={a.id} onClick={()=>{setSelected(a.id);setActiveView('office')}}><div className="activity-card-head"><div className={`activity-avatar avatar-${a.id}`}><OfficePortrait role={a.id}/></div><div><h3>{a.name}</h3><p>{a.role}</p></div><span className={`activity-state state-${a.state}`}>{friendlyState(a.state)}</span></div><div className="activity-detail"><span>Current task</span><b>{current?.title||a.currentTask||'No active assignment'}</b></div><div className="activity-detail"><span>Next step</span><b>{current?.blocker?'Resolve blocker':current?'Continue execution / provide evidence':'Ready for assignment'}</b></div><div className="activity-detail"><span>Latest completed</span><b>{latestDone?.title||'No completed task yet'}</b></div><div className="activity-foot">{assigned.filter(t=>t.status!=='done').length} active · {assigned.filter(t=>t.status==='done').length} completed</div></article>
+            return <article className="activity-card" key={a.id} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}}><div className="activity-card-head"><div className={`activity-avatar avatar-${a.id}`}><OfficePortrait role={a.id}/></div><div><h3>{a.name}</h3><p>{a.role}</p></div><span className={`activity-state state-${a.state}`}>{friendlyState(a.state)}</span></div><div className="activity-detail"><span>Current task</span><b>{current?.title||a.currentTask||'No active assignment'}</b></div><div className="activity-detail"><span>Next step</span><b>{current?.blocker?'Resolve blocker':current?'Continue execution / provide evidence':'Ready for assignment'}</b></div><div className="activity-detail"><span>Latest completed</span><b>{latestDone?.title||'No completed task yet'}</b></div><div className="activity-foot">{assigned.filter(t=>t.status!=='done').length} active · {assigned.filter(t=>t.status==='done').length} completed</div></article>
           })}</div>
         </section>}
 
@@ -709,7 +737,7 @@ function App() {
               <div className="office-section-title"><h3>♣ OPERATIONS FLOOR</h3><div className="office-light-controls"><button type="button" className={`office-lights-toggle ${progressLightsEnabled ? "enabled" : ""}`} onClick={() => setProgressLightsEnabled(x => !x)} aria-pressed={progressLightsEnabled} title="Turn all progress indicator lights on or off">💡 Lights {progressLightsEnabled ? "On" : "Off"}</button><span>{workerAgents.length} specialist agents</span></div></div>
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
               <div className="office-agent-grid office-v3-team">
-                {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>setSelected(a.id)} title={`Select ${a.name} to assign a task`}>
+                {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}} title={`Select ${a.name} to assign a task`}>
                   <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><OfficePortrait role={a.id}/></div>
                   <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
                   <MiniProgress completed={completedByAgent[a.id]??0} assigned={activeTasks.filter(t=>t.agentId===a.id).length} lightsEnabled={progressLightsEnabled} blocked={activeTasks.some(t=>t.agentId===a.id && !!t.blocker)}/>
@@ -750,7 +778,18 @@ function App() {
           <div className="panel results-panel"><div className="panel-title"><h2>Completed Results</h2><div className="results-header-actions"><button type="button" className="clear-completed-btn" onClick={()=>void exportTaskBackup()} title="Download task backup without deleting any data">⬇ Backup Tasks</button><button type="button" className="clear-completed-btn" onClick={clearDone} disabled={clearingCompleted || doneTasks.length === 0}>{clearingCompleted ? "Clearing…" : "🗑 Clear Completed"}</button><span>{doneTasks.length} complete</span></div></div>{doneTasks.length === 0 ? <p className="muted">No completed results yet</p> : [...doneTasks].sort((a, b) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime()).slice(0,30).map(t => <CompletedTaskCard key={t.id} task={t} agentName={agents.find(a => a.id === t.agentId)?.name ?? 'Agent'} />)}</div>
         </aside>
       </main>
+      {agentDrawerOpen && selectedAgent && <div className="agent-drawer-backdrop" onClick={()=>setAgentDrawerOpen(false)}>
+        <aside className="agent-drawer" onClick={e=>e.stopPropagation()}>
+          <div className="agent-drawer-head"><div className={`agent-drawer-avatar avatar-${selectedAgent.id}`}><OfficePortrait role={selectedAgent.id}/></div><div><span className="ops-kicker">AGENT PROFILE</span><h2>{selectedAgent.name}</h2><p>{selectedAgent.role}</p></div><button type="button" className="agent-drawer-close" onClick={()=>setAgentDrawerOpen(false)}>×</button></div>
+          <div className="agent-drawer-status"><span className="activity-state">{friendlyState(selectedAgent.state)}</span><span>{selectedAgentActive.length} active · {selectedAgentDone.length} completed</span></div>
+          <section><h3>Current work</h3>{selectedAgentActive.slice(0,4).map(t=><article className="drawer-task" key={t.id}><b>{t.title}</b><span>{t.blocker?'Blocked':t.phase||t.status}</span>{t.blocker&&<small>⚠ {t.blocker}</small>}</article>)}{!selectedAgentActive.length&&<div className="ops-empty">Ready for assignment</div>}</section>
+          <section><h3>Skills</h3><div className="drawer-skills">{(agentSkills[selectedAgent.id]||[]).map(s=><span key={s}>{s}</span>)}</div></section>
+          <section><h3>Latest completed</h3>{selectedAgentDone.slice(0,3).map(t=><article className="drawer-task done" key={t.id}><b>{t.title}</b><span>Completed</span>{(t.driveUrl||t.videoUrl)&&<a href={t.driveUrl||t.videoUrl} target="_blank" rel="noreferrer">Open evidence ↗</a>}</article>)}{!selectedAgentDone.length&&<div className="ops-empty">No completed task yet</div>}</section>
+          <button type="button" className="drawer-primary" onClick={()=>{setActiveView('office');setAgentDrawerOpen(false)}}>Assign task in Office</button>
+        </aside>
+      </div>}
       {showTypingTool && <div onClick={() => setShowTypingTool(false)} style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(2,8,18,.86)',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px'}}><div onClick={e => e.stopPropagation()} style={{width:'min(1500px,96vw)',height:'min(920px,92vh)',background:'#081523',border:'1px solid #294b68',borderRadius:'14px',boxShadow:'0 24px 80px rgba(0,0,0,.55)',overflow:'hidden',display:'flex',flexDirection:'column'}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #294b68',background:'#0d1d2d'}}><div><b style={{color:'#e9f7ff'}}>⌨ Leo Typing Tool</b><span style={{marginLeft:'10px',fontSize:'11px',color:'#6f8ca5'}}>Integrated training workspace</span></div><div style={{display:'flex',gap:'8px'}}><a href={TYPING_TOOL_URL} target="_blank" rel="noreferrer" style={{padding:'7px 10px',border:'1px solid #315878',borderRadius:'7px',color:'#bfe9ff',textDecoration:'none',fontSize:'11px'}}>Open Full Screen ↗</a><button onClick={() => setShowTypingTool(false)} style={{padding:'7px 11px',background:'#35121d',border:'1px solid #8f3d4b',borderRadius:'7px',color:'#ffd8e1'}}>Close</button></div></div><iframe title="Leo Typing Tool" src={TYPING_TOOL_URL} style={{width:'100%',height:'100%',border:0,background:'#07111c'}} allow="clipboard-read; clipboard-write" /></div></div>}
+      </div>
     </div>
   );
 }
