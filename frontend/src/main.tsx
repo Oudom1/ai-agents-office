@@ -685,7 +685,7 @@ function App() {
             const assigned=tasks.filter(t=>t.agentId===a.id);
             const current=assigned.find(t=>t.status!=='done');
             const latestDone=assigned.find(t=>t.status==='done');
-            return <article className="activity-card" key={a.id} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}}><div className="activity-card-head"><div className={`activity-avatar avatar-${a.id}`}><OfficePortrait role={a.id}/></div><div><h3>{a.name}</h3><p>{a.role}</p></div><span className={`activity-state state-${a.state}`}>{friendlyState(a.state)}</span></div><div className="activity-detail"><span>Current task</span><b>{current?.title||a.currentTask||'No active assignment'}</b></div><div className="activity-detail"><span>Next step</span><b>{current?.blocker?'Resolve blocker':current?'Continue execution / provide evidence':'Ready for assignment'}</b></div><div className="activity-detail"><span>Latest completed</span><b>{latestDone?.title||'No completed task yet'}</b></div><div className="activity-foot">{assigned.filter(t=>t.status!=='done').length} active · {assigned.filter(t=>t.status==='done').length} completed</div></article>
+            return <article className="activity-card" key={a.id} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}}><div className="activity-card-head"><div className={`activity-avatar avatar-${a.id}`}><OfficePortrait role={a.id}/></div><div><h3>{a.name}</h3><p>{a.role}</p></div><span className={`activity-state state-${a.state}`}><i className="activity-pulse"/>{friendlyState(a.state)}</span></div><div className="activity-detail"><span>Current task</span><b>{current?.title||a.currentTask||'No active assignment'}</b></div><div className="activity-detail"><span>Next step</span><b>{current?.blocker?'Resolve blocker':current?'Continue execution / provide evidence':'Ready for assignment'}</b></div><div className="activity-detail"><span>Latest completed</span><b>{latestDone?.title||'No completed task yet'}</b></div><div className="activity-foot">{assigned.filter(t=>t.status!=='done').length} active · {assigned.filter(t=>t.status==='done').length} completed</div></article>
           })}</div>
         </section>}
 
@@ -739,7 +739,7 @@ function App() {
               <div className="office-agent-grid office-v3-team">
                 {workerAgents.map(a=><button type="button" className={`office-agent-tile office-v3-agent office-v3-${a.id} ${selected===a.id?"is-selected":""}`} key={a.id} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}} title={`Select ${a.name} to assign a task`}>
                   <div className={`office-agent-portrait office-role-avatar avatar-${a.id}`}><span className="avatar-role-icon">{({sysadmin:'⚙',security:'⬡',cloud:'☁',qa:'✓',implement:'◇',developer:'⌘'} as Record<string,string>)[a.id]||'✦'}</span><OfficePortrait role={a.id}/></div>
-                  <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span></div>
+                  <div className="office-agent-detail"><b>{a.name}</b><small>{a.role}</small><span className="office-live">● {friendlyState(a.state)}</span><span className={`agent-action action-${a.state}`}><i>{agentAction(a.state,a.currentTask).icon}</i>{agentAction(a.state,a.currentTask).label}</span></div>
                   <MiniProgress completed={completedByAgent[a.id]??0} assigned={activeTasks.filter(t=>t.agentId===a.id).length} lightsEnabled={progressLightsEnabled} blocked={activeTasks.some(t=>t.agentId===a.id && !!t.blocker)}/>
                   {a.currentTask&&<div className="office-current-task" title={a.currentTask}>{a.currentTask}</div>}
                 </button>)}
@@ -781,7 +781,8 @@ function App() {
       {agentDrawerOpen && selectedAgent && <div className="agent-drawer-backdrop" onClick={()=>setAgentDrawerOpen(false)}>
         <aside className="agent-drawer" onClick={e=>e.stopPropagation()}>
           <div className="agent-drawer-head"><div className={`agent-drawer-avatar avatar-${selectedAgent.id}`}><OfficePortrait role={selectedAgent.id}/></div><div><span className="ops-kicker">AGENT PROFILE</span><h2>{selectedAgent.name}</h2><p>{selectedAgent.role}</p></div><button type="button" className="agent-drawer-close" onClick={()=>setAgentDrawerOpen(false)}>×</button></div>
-          <div className="agent-drawer-status"><span className="activity-state">{friendlyState(selectedAgent.state)}</span><span>{selectedAgentActive.length} active · {selectedAgentDone.length} completed</span></div>
+          <div className="agent-drawer-status"><span className="activity-state"><i className="activity-pulse"/>{friendlyState(selectedAgent.state)}</span><span>{selectedAgentActive.length} active · {selectedAgentDone.length} completed</span></div>
+          <div className={`drawer-live-action action-${selectedAgent.state}`}><span>{agentAction(selectedAgent.state,selectedAgent.currentTask).icon}</span><div><b>{agentAction(selectedAgent.state,selectedAgent.currentTask).label}</b><small>{selectedAgent.currentTask||'Waiting for next assignment'}</small></div></div>
           <section><h3>Current work</h3>{selectedAgentActive.slice(0,4).map(t=><article className="drawer-task" key={t.id}><b>{t.title}</b><span>{t.blocker?'Blocked':t.phase||t.status}</span>{t.blocker&&<small>⚠ {t.blocker}</small>}</article>)}{!selectedAgentActive.length&&<div className="ops-empty">Ready for assignment</div>}</section>
           <section><h3>Skills</h3><div className="drawer-skills">{(agentSkills[selectedAgent.id]||[]).map(s=><span key={s}>{s}</span>)}</div></section>
           <section><h3>Latest completed</h3>{selectedAgentDone.slice(0,3).map(t=><article className="drawer-task done" key={t.id}><b>{t.title}</b><span>Completed</span>{(t.driveUrl||t.videoUrl)&&<a href={t.driveUrl||t.videoUrl} target="_blank" rel="noreferrer">Open evidence ↗</a>}</article>)}{!selectedAgentDone.length&&<div className="ops-empty">No completed task yet</div>}</section>
@@ -803,6 +804,19 @@ function ActiveTaskCard({task, agentName, now, onComplete, onBlocker}: {task: Ta
 }
 
 function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) { return <div className="result-card"><div className="result-top"><span className="result-status">COMPLETE</span><span className="task-agent">{agentName}</span></div><div className="task-meta">{task.provider && <span className="task-provider">{task.provider}</span>}{task.freeOnly && <span className="free-badge">FREE ONLY</span>}</div><b>{task.title}</b><p className="result-msg">{task.resultMessage ?? 'Complete — task finished.'}</p><p className="result-duration-native">⏱ Time spent: {taskElapsed(task)}</p><div className="task-bottom"><span>{task.completedAt ? `Completed ${timeAgo(task.completedAt)}` : 'Completed'}</span></div>{task.nextRunAt && <p className="result-msg">Next Kai refresh: {formatCountdown(task.nextRunAt)}</p>}{task.videoUrl && <a className="result-link" href={task.videoUrl} target="_blank" rel="noreferrer">Open Final MP4</a>}{task.driveUrl && <a className="result-link" href={task.driveUrl} target="_blank" rel="noreferrer">Open Video in Google Drive</a>}</div>; }
+
+function agentAction(state:string,currentTask?:string){
+  if(state==='called') return {icon:'↗',label:'Going to Alex'};
+  if(state==='assigned-task') return {icon:'✉',label:'Task received'};
+  if(state==='preparing') return {icon:'◌',label:'Preparing'};
+  if(state==='working-task'||state==='working') return {icon:'⚡',label:currentTask?'Working now':'Working'};
+  if(state==='blocked') return {icon:'!',label:'Needs help'};
+  if(state==='break'||state==='coffee') return {icon:'☕',label:'On break'};
+  if(state==='snack') return {icon:'🍪',label:'Snack break'};
+  if(state==='lunch') return {icon:'🍜',label:'Lunch'};
+  if(state==='off-duty') return {icon:'☾',label:'Resting'};
+  return {icon:'●',label:'Available'};
+}
 
 function friendlyState(state: string) { if (state === 'assigned-task') return 'assigned'; if (state === 'working-task') return 'working'; if (state === 'off-duty') return 'resting'; if (state === 'snack') return 'snack break'; return state; }
 function friendlyPhase(phase?: string) { if (phase === 'starting') return 'Connecting'; if (phase === 'generating') return 'Generating'; if (phase === 'merging') return 'Merging'; if (phase === 'uploading') return 'Uploading'; if (phase === 'provider-error') return 'Retry Provider'; if (phase === 'free-check') return 'Free Check'; if (phase === 'received') return 'Received'; if (phase === 'preparing') return 'Preparing'; if (phase === 'working') return 'Working'; if (phase === 'completed') return 'Completed'; if (phase === 'ready' || phase === 'awaiting-execution') return 'Ready · Parallel'; if (phase === 'executing') return 'Executing'; if (phase === 'blocked') return 'Blocked'; return 'Queued'; }
