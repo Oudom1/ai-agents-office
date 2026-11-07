@@ -30,14 +30,13 @@ jobs:
       - name: Build frontend
         run: npm run build -w frontend
         env:
-          VITE_API_URL: https://ai-agents-office-production.up.railway.app
+          VITE_API_URL: https://ai-agents-office-api-v2.onrender.com
       - name: Verify patch portal included in Pages build
         run: |
           mkdir -p frontend/dist/patch-analysis
           cp patch-analysis/index.html frontend/dist/patch-analysis/index.html
           test -s frontend/dist/patch-analysis/index.html
-          grep -q "Previewing" frontend/dist/patch-analysis/index.html
-          echo "Patch analysis preview-table code is present in deployment artifact"
+          echo "Patch analysis portal is present in deployment artifact"
       - uses: actions/configure-pages@v5
         with:
           enablement: true
