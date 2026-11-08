@@ -8,7 +8,9 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { agents, tasks, managerPoint, loungePoint, cafeteriaPoint, startedAt } from './store.js';
-import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog } from './auth-store.js';
+import { databaseConfigured, strongPassword, verifyAdminPassword, resetAdminPassword, createAppUser, persistSecurityLog, persistSession, loadSession, revokeSession, revokeAllSessions, pruneExpiredSessions } from './auth-store.js';
+import { databaseHealth } from './db.js';
+import { hydrateOfficeState, officePersistenceReady, persistAgentState, persistTaskState, deleteTaskState, deleteCompletedTaskStates, clearTaskStates } from './office-store.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -62,11 +64,22 @@ function bearer(req:any){
   return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
-function requireAuth(req:any,res:any,next:any){
+async function requireAuth(req:any,res:any,next:any){
   const token=bearer(req);
-  const session=sessions.get(token);
+  if(!token) return res.status(401).json({error:'Authentication required'});
+  let session=sessions.get(token) || null;
+  if(databaseConfigured()){
+    try{
+      session=await loadSession(token);
+      if(session) sessions.set(token,session);
+    }catch(e){
+      console.error('Session lookup failed',e);
+      // Keep a valid hot-cache session during a brief database interruption.
+      session=sessions.get(token) || null;
+    }
+  }
   if(!session || session.expiresAt<=Date.now()){
-    if(token) sessions.delete(token);
+    sessions.delete(token);
     return res.status(401).json({error:'Authentication required'});
   }
   req.auth=session;
@@ -132,11 +145,16 @@ app.use(cors({
 }));
 app.use(express.json({limit:'100kb'}));
 
-app.get('/api/health', (_req,res)=>res.json({
+app.get('/api/health', async (_req,res)=>{
+  const db=await databaseHealth();
+  res.json({
   ok:true,
   service:'ai-agents-office-api',
   authConfigured:Boolean(ADMIN_PASSWORD) || databaseConfigured(),
   databaseConfigured:databaseConfigured(),
+  databaseHealthy:db.ok,
+  sessionPersistence:databaseConfigured()?'neon':'memory',
+  officePersistence:officePersistenceReady()?'neon':'memory',
   passwordResetConfigured:Boolean(PASSWORD_RESET_KEY) && databaseConfigured(),
   videoProvider:{name:'Hugging Face ZeroGPU LTX Video Fast',configured:true,freeOnly:true,paidFallback:false,bestEffort:true,space:HF_SPACE_ID,authenticated:Boolean(HF_TOKEN),quotaMode:HF_TOKEN?'free-account':'anonymous',maxOutputSeconds:60,sceneSeconds:8,defaultSeconds:12,talkingDefaultSeconds:20,frame:'512x288 16:9',voice:'Edge neural TTS (free best-effort)'},
   googleDrive:{configured:driveConfigured(),folderId:GOOGLE_DRIVE_FOLDER_ID},
@@ -145,7 +163,8 @@ app.get('/api/health', (_req,res)=>res.json({
   startedAt,
   uptimeSec:Math.floor(process.uptime()),
   now:new Date().toISOString()
-}));
+  });
+});
 
 app.post('/api/auth/handshake',(req,res)=>{
   if(!ADMIN_PASSWORD && !databaseConfigured()) return res.status(503).json({error:'Security backend is not configured'});
@@ -235,6 +254,13 @@ app.post('/api/auth/login',async(req,res)=>{
   loginAttempts.delete(ip);
   const token=randomBytes(32).toString('hex');
   const expiresAt=Date.now()+SESSION_TTL_HOURS*60*60*1000;
+  try{
+    await persistSession(token,username,expiresAt);
+  }catch(e){
+    console.error('Session persistence failed',e);
+    addSecurityLog(req,'FAILED',username,'Login verified but session persistence failed');
+    return res.status(503).json({error:'Session service is temporarily unavailable'});
+  }
   sessions.set(token,{user:username,expiresAt});
   addSecurityLog(req,'SUCCESS',username,'Login accepted via ECDH key exchange + AES-GCM verification');
   res.json({ok:true,token,user:username,expiresAt:new Date(expiresAt).toISOString()});
@@ -265,6 +291,7 @@ app.post('/api/auth/reset-password',async(req,res)=>{
   }
   try{
     await resetAdminPassword(username,newPassword);
+    await revokeAllSessions();
     sessions.clear();
     loginAttempts.clear();
     resetAttempts.delete(ip);
@@ -279,10 +306,11 @@ app.post('/api/auth/reset-password',async(req,res)=>{
 
 app.get('/api/auth/status',requireAuth,(req:any,res)=>res.json({ok:true,user:req.auth.user,expiresAt:new Date(req.auth.expiresAt).toISOString()}));
 app.get('/api/auth/logs',requireAuth,(_req,res)=>res.json(securityLogs));
-app.post('/api/auth/logout',requireAuth,(req:any,res)=>{
+app.post('/api/auth/logout',requireAuth,async(req:any,res)=>{
   const token=bearer(req);
   addSecurityLog(req,'SUCCESS',req.auth.user,'Logged out');
   sessions.delete(token);
+  try{await revokeSession(token);}catch(e){console.error('Session revoke failed',e);}
   res.json({ok:true});
 });
 
@@ -571,15 +599,16 @@ app.get('/api/video/status/:generationId', requireAuth, async (req:any,res)=>{
   return res.json({ok:true,status:'generating',provider:job.provider,generationId,bestEffort:true,elapsedSec});
 });
 
-app.post('/api/manager/call/:agentId', requireAuth, (req,res)=>{
+app.post('/api/manager/call/:agentId', requireAuth, async (req,res)=>{
   const agent = agents.find(a=>a.id===req.params.agentId);
   if(!agent) return res.status(404).json({error:'Agent not found'});
   agent.state='called';
   (agent as any).destination=managerPoint;
+  try{await persistAgentState(agent);}catch(e){console.error('Agent persistence failed',e);}
   res.json(agent);
 });
 
-app.post('/api/agents/:agentId/state', requireAuth, (req,res)=>{
+app.post('/api/agents/:agentId/state', requireAuth, async (req,res)=>{
   const agent = agents.find(a=>a.id===req.params.agentId);
   if(!agent) return res.status(404).json({error:'Agent not found'});
   const state = req.body.state;
@@ -587,56 +616,105 @@ app.post('/api/agents/:agentId/state', requireAuth, (req,res)=>{
   if(state==='break') (agent as any).destination=loungePoint;
   else if(state==='lunch') (agent as any).destination=cafeteriaPoint;
   else if(state==='working') (agent as any).destination=agent.home;
+  try{await persistAgentState(agent);}catch(e){console.error('Agent persistence failed',e);}
   res.json(agent);
 });
 
-app.post('/api/tasks', requireAuth, (req,res)=>{
+app.post('/api/tasks', requireAuth, async (req,res)=>{
   const {agentId,title,description=''}=req.body;
   const agent=agents.find(a=>a.id===agentId);
   if(!agent || !title) return res.status(400).json({error:'agentId and title are required'});
-  const task:any={id:crypto.randomUUID(),agentId,title,description,status:'active',createdAt:new Date().toISOString()};
+  const task:any={id:crypto.randomUUID(),agentId,title,description,status:'active',phase:'queued',freeOnly:false,createdAt:new Date().toISOString()};
   tasks.unshift(task);
   agent.state='assigned-task';
   (agent as any).currentTask=title;
   (agent as any).destination=agent.home;
+  try{
+    await persistTaskState(task);
+    await persistAgentState(agent);
+  }catch(e){
+    tasks.splice(tasks.findIndex(t=>t.id===task.id),1);
+    console.error('Task persistence failed',e);
+    return res.status(503).json({error:'Task persistence is temporarily unavailable'});
+  }
   res.status(201).json(task);
 });
 
-app.patch('/api/tasks/:id/done', requireAuth, (req,res)=>{
+app.patch('/api/tasks/:id', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task) return res.status(404).json({error:'Task not found'});
+  const allowed=['phase','blocker','provider','resultMessage','driveUrl','videoUrl','generationTimeSec','durationSec','startedAt','nextRunAt','sourceTaskId','providerJobId'];
+  for(const key of allowed) if(Object.prototype.hasOwnProperty.call(req.body||{},key)) task[key]=req.body[key] ?? undefined;
+  const agent=agents.find(a=>a.id===task.agentId);
+  if(agent){
+    if(task.blocker){agent.state='blocked';(agent as any).currentTask=task.title;(agent as any).destination=managerPoint;}
+    else if(task.status!=='done'){agent.state='working-task';(agent as any).currentTask=task.title;(agent as any).destination=agent.home;}
+  }
+  try{
+    await persistTaskState(task);
+    if(agent) await persistAgentState(agent);
+  }catch(e){console.error('Task update persistence failed',e);return res.status(503).json({error:'Task persistence failed'});}
+  res.json(task);
+});
+
+app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
   const task=tasks.find(t=>t.id===req.params.id);
   if(!task) return res.status(404).json({error:'Task not found'});
   task.status='done';
+  task.phase='completed';
   task.completedAt=new Date().toISOString();
   const agent=agents.find(a=>a.id===task.agentId);
   if(agent){agent.state='working'; delete (agent as any).currentTask; (agent as any).destination=agent.home;}
+  try{
+    await persistTaskState(task);
+    if(agent) await persistAgentState(agent);
+  }catch(e){console.error('Completion persistence failed',e);return res.status(503).json({error:'Completion persistence failed'});}
   res.json(task);
 });
 
 // Bulk-delete completed history only. Expected count avoids accidental stale-tab deletion.
-app.delete('/api/tasks/completed', requireAuth, (req,res)=>{
+app.delete('/api/tasks/completed', requireAuth, async (req,res)=>{
   const expected=Number(req.query.expectedCount);
   if(!Number.isSafeInteger(expected)||expected<0)return res.status(400).json({error:'Valid expectedCount is required'});
   const actual=tasks.filter(t=>t.status==='done').length;
   if(actual!==expected)return res.status(409).json({error:`Completed count changed (now ${actual}). Refresh before clearing.`,actualCount:actual});
+  try{
+    const result:any=await deleteCompletedTaskStates(expected);
+    if(result?.conflict)return res.status(409).json({error:`Completed count changed in database (now ${result.actualCount}). Refresh before clearing.`,actualCount:result.actualCount});
+  }catch(e){console.error('Completed task cleanup failed',e);return res.status(503).json({error:'Database cleanup failed'});}
   for(let i=tasks.length-1;i>=0;i--)if(tasks[i].status==='done')tasks.splice(i,1);
   return res.json({ok:true,removedCount:actual,activePreserved:tasks.length});
 });
 
-app.delete('/api/tasks/:id', requireAuth, (req,res)=>{
+app.delete('/api/tasks/:id', requireAuth, async (req,res)=>{
   const index=tasks.findIndex(t=>t.id===req.params.id);
   if(index<0) return res.status(404).json({error:'Task not found'});
-  const [removed]=tasks.splice(index,1);
+  const removed=tasks[index];
+  try{await deleteTaskState(removed.id);}catch(e){console.error('Task delete persistence failed',e);return res.status(503).json({error:'Task delete failed'});}
+  tasks.splice(index,1);
   const agent=agents.find(a=>a.id===removed.agentId);
-  if(agent && (agent as any).currentTask===removed.title){agent.state='working'; delete (agent as any).currentTask;}
+  if(agent && (agent as any).currentTask===removed.title){agent.state='working'; delete (agent as any).currentTask;await persistAgentState(agent).catch(()=>{});}
   res.json({ok:true,removed});
 });
 
-app.delete('/api/tasks', requireAuth, (_req,res)=>{
+app.delete('/api/tasks', requireAuth, async (_req,res)=>{
+  try{await clearTaskStates();}catch(e){console.error('Task clear persistence failed',e);return res.status(503).json({error:'Task clear failed'});}
   tasks.splice(0,tasks.length);
   agents.forEach(a=>{delete (a as any).currentTask;if(a.id!=='implement')a.state='working';});
+  await Promise.all(agents.map(a=>persistAgentState(a).catch(()=>{})));
   res.json({ok:true});
 });
 
 registerPatchResearch(app, requireAuth);
 
-app.listen(port,'0.0.0.0',()=>console.log(`AI Agents Office API running on port ${port}`));
+async function boot(){
+  try{
+    await hydrateOfficeState(agents,tasks);
+    await pruneExpiredSessions();
+    console.log(`Neon persistence ready: ${officePersistenceReady()}; loaded ${tasks.length} task(s)`);
+  }catch(e){
+    console.error('Neon office hydration failed; starting with in-memory fallback',e);
+  }
+  app.listen(port,'0.0.0.0',()=>console.log(`AI Agents Office API running on port ${port}`));
+}
+void boot();
