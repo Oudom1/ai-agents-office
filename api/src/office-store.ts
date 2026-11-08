@@ -106,8 +106,8 @@ export async function deleteCompletedTaskStates(expectedCount:number){
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    const count=await client.query("SELECT count(*)::int AS n FROM tasks WHERE status='done' FOR SHARE");
-    const actual=Number(count.rows[0]?.n||0);
+    const locked=await client.query("SELECT id FROM tasks WHERE status='done' FOR UPDATE");
+    const actual=locked.rowCount||0;
     if(actual!==expectedCount){
       await client.query('ROLLBACK');
       return {conflict:true,actualCount:actual,removedCount:0};
