@@ -15,6 +15,15 @@ type Agent = {
   currentTask?: string;
 };
 
+type HandoffEvent = {
+  id: string;
+  from: string;
+  to: string;
+  taskTitle: string;
+  label: string;
+  createdAt: string;
+};
+
 type Task = {
   id: string;
   title: string;
@@ -182,6 +191,7 @@ function App() {
   const [systemHealth, setSystemHealth] = useState<{api:'checking'|'online'|'offline';db:'checking'|'online'|'offline';checkedAt?:string}>({api:'checking',db:'checking'});
   const [globalSearch, setGlobalSearch] = useState('');
   const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
+  const [handoffs, setHandoffs] = useState<HandoffEvent[]>([]);
 
   useEffect(() => {
     void cleanTemporaryOfficeCache();
@@ -310,6 +320,23 @@ function App() {
 
   const updateLocal = (id: string, patch: Partial<Agent>) => setAgents(prev => prev.map(a => a.id === id ? {...a, ...patch} : a));
   const patchTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? {...t, ...patch} : t));
+  const pushHandoff = (from: string, to: string, taskTitle: string, label: string) => {
+    const event: HandoffEvent = {id: crypto.randomUUID(), from, to, taskTitle, label, createdAt: new Date().toISOString()};
+    setHandoffs(prev => [event, ...prev].slice(0, 8));
+  };
+  const moveForHandoff = (from: string, to: string, taskTitle: string, label: string) => {
+    const fromAgent = agents.find(a => a.id === from);
+    const toAgent = agents.find(a => a.id === to);
+    if (!fromAgent || !toAgent) return;
+    const meeting = {x: (fromAgent.home.x + toAgent.home.x) / 2, y: (fromAgent.home.y + toAgent.home.y) / 2};
+    pushHandoff(from, to, taskTitle, label);
+    updateLocal(from, {state:'handoff', currentTask:taskTitle, destination:meeting});
+    updateLocal(to, {state:'receiving', currentTask:taskTitle, destination:meeting});
+    window.setTimeout(() => {
+      updateLocal(from, {state:'working', currentTask:undefined, destination:fromAgent.home});
+      updateLocal(to, {state:'working', currentTask:undefined, destination:toAgent.home});
+    }, 4200);
+  };
 
   useEffect(() => {
     const date = new Date(now);
@@ -341,8 +368,16 @@ function App() {
     try {
       const r = await authFetch(`${API}/manager/call/${selected}`, {method: 'POST'});
       if (!r.ok) throw 0;
-      await refresh();
-    } catch { updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}}); }
+      updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}});
+      pushHandoff(selected, 'manager', agents.find(a=>a.id===selected)?.currentTask || 'Manager consultation', 'Escalated to Alex');
+      window.setTimeout(() => {
+        const a = agents.find(x=>x.id===selected);
+        updateLocal(selected, {state:'working', destination:a?.home});
+      }, 4200);
+    } catch {
+      updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}});
+      pushHandoff(selected, 'manager', agents.find(a=>a.id===selected)?.currentTask || 'Manager consultation', 'Escalated to Alex');
+    }
   };
 
   const state = async (s: string) => {
@@ -395,10 +430,12 @@ function App() {
     };
     setTasks(prev => [task, ...prev]);
     if (kaiBlocked) {
-      updateLocal('implement', {state: 'blocked', currentTask: title, destination: {x: 85, y: 18}});
+      updateLocal('implement', {state: 'blocked', currentTask: title, destination: {x: 13, y: 15}});
+      pushHandoff('implement', 'manager', title, 'Provider blocker escalated');
       setNotice('Kai is ready. Real free video provider integration is still pending.');
     } else {
       startLocalTaskMotion(agentId, title, id);
+      pushHandoff('manager', agentId, title, 'Alex assigned work');
     }
     return task;
   };
@@ -460,8 +497,11 @@ function App() {
     try {
       const r = await authFetch(`${API}/tasks`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agentId: targetAgent, title})});
       if (!r.ok) throw 0;
+      const created = await r.json().catch(() => null);
       setTaskTitle('');
       await refresh();
+      if (created?.id) startLocalTaskMotion(targetAgent, title, created.id);
+      pushHandoff('manager', targetAgent, title, 'Alex assigned work');
     } catch {
       addLocalTask(targetAgent, title);
       setTaskTitle('');
@@ -519,6 +559,12 @@ function App() {
       const a = agents.find(x => x.id === task.agentId);
       updateLocal(task.agentId, {state: 'working', currentTask: undefined, destination: a?.home});
     }
+
+    // Visual delivery handoff: Development → QA → Security → Cloud/Deployment.
+    if (task.agentId === 'developer') moveForHandoff('developer','qa',task.title,'Ready for QA');
+    else if (task.agentId === 'qa') moveForHandoff('qa','security',task.title,'QA passed · Security review');
+    else if (task.agentId === 'security') moveForHandoff('security','cloud',task.title,'Security passed · Ready to deploy');
+    else if (task.agentId === 'cloud') moveForHandoff('cloud','manager',task.title,'Deployment complete · Report to Alex');
     setNotice(isKai ? 'Complete — real video ready in Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
   };
 
@@ -532,7 +578,12 @@ function App() {
     }
     const blocker = task.blocker ? undefined : `${name} needs Alex support / decision to continue this task.`;
     patchTask(task.id, {blocker});
-    updateLocal(task.agentId, {state: blocker ? 'blocked' : 'working-task'});
+    const a = agents.find(x=>x.id===task.agentId);
+    updateLocal(task.agentId, {
+      state: blocker ? 'blocked' : 'working-task',
+      destination: blocker ? {x:13,y:15} : a?.home
+    });
+    if (blocker) pushHandoff(task.agentId,'manager',task.title,'Blocker raised to Alex');
     setNotice(blocker ? `${name} raised a blocker to Alex` : `${name} blocker cleared`);
   };
 
@@ -606,6 +657,7 @@ function App() {
   const selectedAgentTasks = selectedAgent ? tasks.filter(t=>t.agentId===selectedAgent.id) : [];
   const selectedAgentActive = selectedAgentTasks.filter(t=>t.status!=='done');
   const selectedAgentDone = selectedAgentTasks.filter(t=>t.status==='done');
+  const latestHandoff = handoffs[0];
   const searchResults = globalSearch.trim() ? [
     ...tasks.filter(t=>t.title.toLowerCase().includes(globalSearch.toLowerCase())).slice(0,5).map(t=>({kind:'Task',label:t.title,agentId:t.agentId})),
     ...agents.filter(a=>(a.name+' '+a.role).toLowerCase().includes(globalSearch.toLowerCase())).slice(0,5).map(a=>({kind:'Agent',label:`${a.name} · ${a.role}`,agentId:a.id}))
@@ -733,6 +785,28 @@ function App() {
                 <div className="office-task-preview office-v3-preview">{activeTasks.slice(0,3).map(t=><div key={t.id}><span>{agents.find(a=>a.id===t.agentId)?.name||'Agent'}</span>{t.title}</div>)}{!activeTasks.length&&<p>No pending assignments</p>}</div>
               </div>
             </div>
+            <div className="office-v2-panel movement-panel">
+              <div className="office-section-title"><h3>⇄ LIVE AGENT MOVEMENT</h3><span>{latestHandoff ? latestHandoff.label : 'Workflow ready'}</span></div>
+              <p>Agents move between Alex, workstations, review stages, deployment, and break areas based on real task state.</p>
+              <div className="movement-map">
+                <div className="movement-zone zone-manager"><b>Alex</b><span>Manager / Blockers</span></div>
+                <div className="movement-zone zone-review"><b>Review Lane</b><span>QA → Security → Deployment</span></div>
+                <div className="movement-zone zone-lounge"><b>Lounge</b><span>Break / Snack</span></div>
+                <div className="movement-zone zone-cafe"><b>Cafeteria</b><span>Lunch</span></div>
+                {workerAgents.map(a=>{
+                  const p=a.destination||a.home;
+                  return <button type="button" key={a.id} className={`moving-agent moving-${a.id} moving-state-${a.state}`} style={{left:`${p.x}%`,top:`${p.y}%`}} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}} title={`${a.name}: ${agentAction(a.state,a.currentTask).label}`}>
+                    <span className="moving-avatar"><OfficePortrait role={a.id}/></span>
+                    <b>{a.name}</b>
+                    <small>{agentAction(a.state,a.currentTask).label}</small>
+                  </button>
+                })}
+                {latestHandoff && <div className="handoff-banner"><span>⇄</span><div><b>{agents.find(a=>a.id===latestHandoff.from)?.name||'Alex'} → {agents.find(a=>a.id===latestHandoff.to)?.name||'Alex'}</b><small>{latestHandoff.label} · {latestHandoff.taskTitle}</small></div></div>}
+              </div>
+              <div className="handoff-feed">
+                {handoffs.length===0?<span>No handoffs yet — assign a task to start the workflow.</span>:handoffs.slice(0,4).map(h=><div key={h.id}><i>⇄</i><b>{agents.find(a=>a.id===h.from)?.name||'Alex'} → {agents.find(a=>a.id===h.to)?.name||'Alex'}</b><span>{h.label}</span><small>{h.taskTitle}</small></div>)}
+              </div>
+            </div>
             <div className="office-v2-panel office-operations">
               <div className="office-section-title"><h3>♣ OPERATIONS FLOOR</h3><div className="office-light-controls"><button type="button" className={`office-lights-toggle ${progressLightsEnabled ? "enabled" : ""}`} onClick={() => setProgressLightsEnabled(x => !x)} aria-pressed={progressLightsEnabled} title="Turn all progress indicator lights on or off">💡 Lights {progressLightsEnabled ? "On" : "Off"}</button><span>{workerAgents.length} specialist agents</span></div></div>
               <p>Agent workstations, current activity, and progress · Click any agent to assign a task</p>
@@ -807,6 +881,8 @@ function CompletedTaskCard({task, agentName}: {task: Task; agentName: string}) {
 
 function agentAction(state:string,currentTask?:string){
   if(state==='called') return {icon:'↗',label:'Going to Alex'};
+  if(state==='handoff') return {icon:'⇄',label:'Handing off'};
+  if(state==='receiving') return {icon:'⇣',label:'Receiving work'};
   if(state==='assigned-task') return {icon:'✉',label:'Task received'};
   if(state==='preparing') return {icon:'◌',label:'Preparing'};
   if(state==='working-task'||state==='working') return {icon:'⚡',label:currentTask?'Working now':'Working'};
