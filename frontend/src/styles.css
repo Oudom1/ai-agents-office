@@ -410,3 +410,12 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 @media(max-width:900px){.movement-map{height:360px}.handoff-feed{grid-template-columns:repeat(2,minmax(0,1fr))}.moving-agent{width:68px!important}.moving-avatar{width:42px;height:42px}}
 @media(max-width:560px){.movement-map{height:410px}.handoff-feed{grid-template-columns:1fr}.handoff-banner{width:88%}.movement-zone{padding:6px}.moving-agent{width:62px!important}.moving-avatar{width:38px;height:38px}}
 @media(prefers-reduced-motion:reduce){.moving-agent{transition:none!important}.moving-avatar,.handoff-banner{animation:none!important}}
+
+
+/* Movement-floor readability fixes */
+.zone-workstations{left:12%;top:34%;width:76%;height:31%;border-style:solid;border-color:#173c57;background:#08182766}
+.manager-fixed{z-index:10!important}
+.manager-fixed .moving-avatar{border-color:#63e6ff;box-shadow:0 0 0 4px #0b1b2b,0 0 22px #48d8ed66}
+.moving-state-off-duty .moving-avatar{opacity:.78;filter:saturate(.55);box-shadow:0 0 0 4px #0b1b2b,0 0 12px #35627a44}
+.moving-state-off-duty>small{color:#7895a7}
+@media(max-width:900px){.zone-workstations{left:8%;width:84%}}
