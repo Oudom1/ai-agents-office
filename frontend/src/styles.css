@@ -369,3 +369,44 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 @keyframes agentBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 @keyframes agentAlert{0%,100%{box-shadow:0 0 0 #ff5d75}50%{box-shadow:0 0 10px #ff5d75}}
 @media(prefers-reduced-motion:reduce){.agent-action:after,.agent-action i,.activity-pulse{animation:none!important}}
+
+
+/* Live movement floor */
+.movement-panel{margin-bottom:14px;overflow:hidden}
+.movement-map{position:relative;height:310px;margin-top:12px;border:1px solid #245171;border-radius:14px;background:
+  linear-gradient(90deg,rgba(61,120,165,.08) 1px,transparent 1px),
+  linear-gradient(rgba(61,120,165,.08) 1px,transparent 1px),
+  radial-gradient(circle at 50% 0%,#10365a55,transparent 42%),
+  #061427;
+  background-size:32px 32px,32px 32px,auto,auto;overflow:hidden}
+.movement-zone{position:absolute;border:1px dashed #315d7d;border-radius:12px;background:#0a1f33b8;padding:9px 11px;color:#9dbcd0;pointer-events:none}
+.movement-zone b{display:block;font-size:10px;color:#dff6ff}.movement-zone span{font-size:7px;color:#688ba1}
+.zone-manager{left:4%;top:5%;width:22%;height:23%}
+.zone-review{left:32%;top:5%;width:63%;height:23%}
+.zone-lounge{left:4%;bottom:5%;width:32%;height:20%}
+.zone-cafe{right:4%;bottom:5%;width:32%;height:20%}
+.moving-agent{position:absolute!important;width:78px!important;min-height:82px!important;margin:0!important;padding:4px!important;transform:translate(-50%,-50%);transition:left 1.55s cubic-bezier(.25,.8,.25,1),top 1.55s cubic-bezier(.25,.8,.25,1),filter .3s ease!important;border:0!important;background:transparent!important;color:#dff7ff!important;z-index:8;display:flex!important;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.moving-avatar{width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid #3f92bd;background:#0d2a45;box-shadow:0 0 0 4px #0b1b2b,0 0 18px #34bde744;display:block}
+.moving-avatar svg{width:100%;height:100%;display:block}
+.moving-agent>b{font-size:9px;line-height:1.1}.moving-agent>small{font-size:7px;max-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#72cfe2}
+.moving-state-working-task .moving-avatar,.moving-state-working .moving-avatar{animation:movementWork 1.3s ease-in-out infinite}
+.moving-state-preparing .moving-avatar,.moving-state-assigned-task .moving-avatar{animation:movementPrepare 1s ease-in-out infinite}
+.moving-state-called .moving-avatar,.moving-state-handoff .moving-avatar,.moving-state-receiving .moving-avatar{box-shadow:0 0 0 4px #0b1b2b,0 0 24px #6ae8ff;animation:movementHandoff .85s ease-in-out infinite}
+.moving-state-blocked .moving-avatar{border-color:#ff657c;box-shadow:0 0 0 4px #2a1017,0 0 24px #ff425e99;animation:movementBlocked .8s ease-in-out infinite}
+.moving-state-break .moving-avatar,.moving-state-snack .moving-avatar,.moving-state-lunch .moving-avatar,.moving-state-coffee .moving-avatar{filter:saturate(.75)}
+.handoff-banner{position:absolute;left:50%;top:34%;transform:translateX(-50%);width:min(520px,74%);display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid #2d759a;border-radius:10px;background:#081d30e8;box-shadow:0 8px 30px #0007;z-index:5;animation:handoffBannerIn .45s ease-out}
+.handoff-banner>span{font-size:20px;color:#58def4}.handoff-banner div{min-width:0;display:flex;flex-direction:column}.handoff-banner b{font-size:10px;color:#e5f7ff}.handoff-banner small{font-size:8px;color:#78a9c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.handoff-feed{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:9px}
+.handoff-feed>span{grid-column:1/-1;color:#607f92;font-size:9px;padding:7px}
+.handoff-feed>div{min-width:0;padding:8px;border:1px solid #1c425d;border-radius:9px;background:#081826;display:grid;grid-template-columns:auto 1fr;gap:2px 6px;align-items:center}
+.handoff-feed i{grid-row:1/4;font-style:normal;color:#48d8ed;font-size:15px}.handoff-feed b{font-size:8px;color:#dceff8}.handoff-feed span{font-size:7px;color:#52cfe0}.handoff-feed small{font-size:7px;color:#6d8da0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.action-handoff,.action-receiving{border-color:#2e9cbd;background:#0a2a39;color:#c9f9ff}
+.action-handoff i,.action-receiving i{animation:agentNudge .75s ease-in-out infinite}
+@keyframes movementWork{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes movementPrepare{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes movementHandoff{0%,100%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
+@keyframes movementBlocked{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+@keyframes handoffBannerIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+@media(max-width:900px){.movement-map{height:360px}.handoff-feed{grid-template-columns:repeat(2,minmax(0,1fr))}.moving-agent{width:68px!important}.moving-avatar{width:42px;height:42px}}
+@media(max-width:560px){.movement-map{height:410px}.handoff-feed{grid-template-columns:1fr}.handoff-banner{width:88%}.movement-zone{padding:6px}.moving-agent{width:62px!important}.moving-avatar{width:38px;height:38px}}
+@media(prefers-reduced-motion:reduce){.moving-agent{transition:none!important}.moving-avatar,.handoff-banner{animation:none!important}}
