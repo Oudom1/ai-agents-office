@@ -568,16 +568,22 @@ function App() {
     setNotice(isKai ? 'Complete — real video ready in Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
   };
 
-  const toggleBlocker = (task: Task) => {
+  const toggleBlocker = async (task: Task) => {
     const name = agents.find(a => a.id === task.agentId)?.name ?? 'Agent';
-    if (task.agentId === 'implement' && !KAI_FREE_VIDEO_AVAILABLE) {
-      patchTask(task.id, {blocker: undefined, phase: 'queued'});
-      updateLocal(task.agentId, {state: 'working'});
-      setNotice('Kai is ready; provider integration is pending, not quota-blocked.');
+    const blocker = task.blocker ? undefined : `${name} needs Alex support / decision to continue this task.`;
+    try{
+      const response=await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({blocker,phase:blocker?'blocked':'working'})
+      });
+      if(!response.ok) throw new Error('server rejected blocker update');
+      const updated=await response.json();
+      patchTask(task.id,{blocker:updated.blocker,phase:updated.phase});
+    }catch{
+      setNotice('Cannot persist blocker to the backend. Please retry.');
       return;
     }
-    const blocker = task.blocker ? undefined : `${name} needs Alex support / decision to continue this task.`;
-    patchTask(task.id, {blocker});
     const a = agents.find(x=>x.id===task.agentId);
     updateLocal(task.agentId, {
       state: blocker ? 'blocked' : 'working-task',
