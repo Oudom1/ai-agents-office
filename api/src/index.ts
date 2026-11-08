@@ -107,6 +107,25 @@ function remainingLockSeconds(attempt:{count:number,windowStart:number}){
 }
 
 
+const movementSlots:Record<string,{break:{x:number;y:number};snack:{x:number;y:number};lunch:{x:number;y:number};manager:{x:number;y:number}}>={
+  sysadmin:{break:{x:10,y:78},snack:{x:10,y:86},lunch:{x:69,y:78},manager:{x:10,y:20}},
+  security:{break:{x:20,y:78},snack:{x:20,y:86},lunch:{x:79,y:78},manager:{x:16,y:20}},
+  cloud:{break:{x:30,y:78},snack:{x:30,y:86},lunch:{x:89,y:78},manager:{x:22,y:20}},
+  qa:{break:{x:10,y:86},snack:{x:10,y:78},lunch:{x:69,y:86},manager:{x:10,y:25}},
+  implement:{break:{x:20,y:86},snack:{x:20,y:78},lunch:{x:79,y:86},manager:{x:16,y:25}},
+  developer:{break:{x:30,y:86},snack:{x:30,y:78},lunch:{x:89,y:86},manager:{x:22,y:25}}
+};
+function movementDestination(agent:any,state:string){
+  const slot=movementSlots[agent.id];
+  if(!slot) return agent.home;
+  if(state==='break'||state==='coffee') return slot.break;
+  if(state==='snack') return slot.snack;
+  if(state==='lunch') return slot.lunch;
+  if(state==='called'||state==='blocked') return slot.manager;
+  return agent.home;
+}
+
+
 function findGenerationId(value:any):string|undefined{
   const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const walk=(v:any):string|undefined=>{
@@ -603,7 +622,7 @@ app.post('/api/manager/call/:agentId', requireAuth, async (req,res)=>{
   const agent = agents.find(a=>a.id===req.params.agentId);
   if(!agent) return res.status(404).json({error:'Agent not found'});
   agent.state='called';
-  (agent as any).destination=managerPoint;
+  (agent as any).destination=movementDestination(agent,'called');
   try{await persistAgentState(agent);}catch(e){console.error('Agent persistence failed',e);}
   res.json(agent);
 });
@@ -613,9 +632,7 @@ app.post('/api/agents/:agentId/state', requireAuth, async (req,res)=>{
   if(!agent) return res.status(404).json({error:'Agent not found'});
   const state = req.body.state;
   agent.state=state;
-  if(state==='break') (agent as any).destination=loungePoint;
-  else if(state==='lunch') (agent as any).destination=cafeteriaPoint;
-  else if(state==='working') (agent as any).destination=agent.home;
+  (agent as any).destination=movementDestination(agent,state);
   try{await persistAgentState(agent);}catch(e){console.error('Agent persistence failed',e);}
   res.json(agent);
 });
@@ -647,7 +664,7 @@ app.patch('/api/tasks/:id', requireAuth, async (req,res)=>{
   for(const key of allowed) if(Object.prototype.hasOwnProperty.call(req.body||{},key)) task[key]=req.body[key] ?? undefined;
   const agent=agents.find(a=>a.id===task.agentId);
   if(agent){
-    if(task.blocker){agent.state='blocked';(agent as any).currentTask=task.title;(agent as any).destination=managerPoint;}
+    if(task.blocker){agent.state='blocked';(agent as any).currentTask=task.title;(agent as any).destination=movementDestination(agent,'blocked');}
     else if(task.status!=='done'){agent.state='working-task';(agent as any).currentTask=task.title;(agent as any).destination=agent.home;}
   }
   try{
