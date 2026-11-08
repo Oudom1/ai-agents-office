@@ -83,6 +83,25 @@ const fallbackAgents: Agent[] = [
   {id: 'developer', name: 'Leo', role: 'Senior Developer', state: 'working', position: {x: 75, y: 59}, home: {x: 75, y: 59}}
 ];
 
+const movementSlots: Record<string,{break:{x:number;y:number};snack:{x:number;y:number};lunch:{x:number;y:number};manager:{x:number;y:number}}> = {
+  sysadmin:  {break:{x:10,y:78},snack:{x:10,y:86},lunch:{x:69,y:78},manager:{x:10,y:20}},
+  security:  {break:{x:20,y:78},snack:{x:20,y:86},lunch:{x:79,y:78},manager:{x:16,y:20}},
+  cloud:     {break:{x:30,y:78},snack:{x:30,y:86},lunch:{x:89,y:78},manager:{x:22,y:20}},
+  qa:        {break:{x:10,y:86},snack:{x:10,y:78},lunch:{x:69,y:86},manager:{x:10,y:25}},
+  implement: {break:{x:20,y:86},snack:{x:20,y:78},lunch:{x:79,y:86},manager:{x:16,y:25}},
+  developer: {break:{x:30,y:86},snack:{x:30,y:78},lunch:{x:89,y:86},manager:{x:22,y:25}}
+};
+
+function movementDestination(agent: Agent, state: string) {
+  const slot=movementSlots[agent.id];
+  if(!slot) return agent.home;
+  if(state==='break'||state==='coffee') return slot.break;
+  if(state==='snack') return slot.snack;
+  if(state==='lunch') return slot.lunch;
+  if(state==='called'||state==='blocked') return slot.manager;
+  return agent.home;
+}
+
 const agentSkills: Record<string, string[]> = {
   manager: ['Management', 'Researcher', 'Task Assignment', 'Prioritization', 'Blocker Resolution'],
   sysadmin: ['Windows', 'Active Directory', 'Microsoft 365', 'Troubleshooting', 'PowerShell'],
@@ -348,18 +367,27 @@ function App() {
     setAgents(prev => prev.map(a => {
       if (a.id === 'manager' || a.currentTask || (a.id === 'implement' && !KAI_FREE_VIDEO_AVAILABLE)) return a;
       if (!inWorkHours) {
-        if (a.state !== 'off-duty') return {...a, state: 'off-duty', destination: {x: 13, y: 79}};
+        // After hours agents remain visibly parked at their own workstation.
+        if (a.state !== 'off-duty' || a.destination?.x !== a.home.x || a.destination?.y !== a.home.y) {
+          return {...a, state:'off-duty', destination:a.home};
+        }
         return a;
       }
       if (isLunch) {
-        if (a.state !== 'lunch') return {...a, state: 'lunch', destination: {x: 75, y: 80}};
+        const destination=movementDestination(a,'lunch');
+        if (a.state !== 'lunch' || a.destination?.x !== destination.x || a.destination?.y !== destination.y) {
+          return {...a,state:'lunch',destination};
+        }
         return a;
       }
       if (isSnack) {
-        if (a.state !== 'snack') return {...a, state: 'snack', destination: {x: 33, y: 81}};
+        const destination=movementDestination(a,'snack');
+        if (a.state !== 'snack' || a.destination?.x !== destination.x || a.destination?.y !== destination.y) {
+          return {...a,state:'snack',destination};
+        }
         return a;
       }
-      if (['break','coffee','snack','lunch','off-duty'].includes(a.state)) return {...a, state: 'working', destination: a.home};
+      if (['break','coffee','snack','lunch','off-duty'].includes(a.state)) return {...a,state:'working',destination:a.home};
       return a;
     }));
   }, [Math.floor(now / 60000)]);
@@ -368,14 +396,20 @@ function App() {
     try {
       const r = await authFetch(`${API}/manager/call/${selected}`, {method: 'POST'});
       if (!r.ok) throw 0;
-      updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}});
+      {
+        const a=agents.find(x=>x.id===selected);
+        if(a) updateLocal(selected,{state:'called',destination:movementDestination(a,'called')});
+      }
       pushHandoff(selected, 'manager', agents.find(a=>a.id===selected)?.currentTask || 'Manager consultation', 'Escalated to Alex');
       window.setTimeout(() => {
         const a = agents.find(x=>x.id===selected);
         updateLocal(selected, {state:'working', destination:a?.home});
       }, 4200);
     } catch {
-      updateLocal(selected, {state: 'called', destination: {x: 13, y: 15}});
+      {
+        const a=agents.find(x=>x.id===selected);
+        if(a) updateLocal(selected,{state:'called',destination:movementDestination(a,'called')});
+      }
       pushHandoff(selected, 'manager', agents.find(a=>a.id===selected)?.currentTask || 'Manager consultation', 'Escalated to Alex');
     }
   };
@@ -389,8 +423,8 @@ function App() {
       await refresh();
     } catch {
       const a = agents.find(x => x.id === selected);
-      const destination = s === 'break' ? {x: 13, y: 79} : s === 'snack' ? {x: 33, y: 81} : s === 'lunch' ? {x: 75, y: 80} : a?.home;
-      updateLocal(selected, {state: s, currentTask: undefined, destination});
+      const destination = a ? movementDestination(a,s) : undefined;
+      updateLocal(selected,{state:s,currentTask:undefined,destination});
     }
   };
 
@@ -587,7 +621,7 @@ function App() {
     const a = agents.find(x=>x.id===task.agentId);
     updateLocal(task.agentId, {
       state: blocker ? 'blocked' : 'working-task',
-      destination: blocker ? {x:13,y:15} : a?.home
+      destination: blocker && a ? movementDestination(a,'blocked') : a?.home
     });
     if (blocker) pushHandoff(task.agentId,'manager',task.title,'Blocker raised to Alex');
     setNotice(blocker ? `${name} raised a blocker to Alex` : `${name} blocker cleared`);
@@ -797,8 +831,13 @@ function App() {
               <div className="movement-map">
                 <div className="movement-zone zone-manager"><b>Alex</b><span>Manager / Blockers</span></div>
                 <div className="movement-zone zone-review"><b>Review Lane</b><span>QA → Security → Deployment</span></div>
+                <div className="movement-zone zone-workstations"><b>Workstations</b><span>Sam · Mina · Noah · Lina · Kai · Leo</span></div>
                 <div className="movement-zone zone-lounge"><b>Lounge</b><span>Break / Snack</span></div>
                 <div className="movement-zone zone-cafe"><b>Cafeteria</b><span>Lunch</span></div>
+                <button type="button" className="moving-agent moving-manager manager-fixed" style={{left:'16%',top:'17%'}} onClick={()=>{setSelected('manager');setAgentDrawerOpen(true)}} title="Alex · Manager">
+                  <span className="moving-avatar"><OfficePortrait role="manager"/></span>
+                  <b>Alex</b><small>Manager</small>
+                </button>
                 {workerAgents.map(a=>{
                   const p=a.destination||a.home;
                   return <button type="button" key={a.id} className={`moving-agent moving-${a.id} moving-state-${a.state}`} style={{left:`${p.x}%`,top:`${p.y}%`}} onClick={()=>{setSelected(a.id);setAgentDrawerOpen(true)}} title={`${a.name}: ${agentAction(a.state,a.currentTask).label}`}>
