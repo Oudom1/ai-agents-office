@@ -1,16 +1,16 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import pg from 'pg';
-
-const { Pool } = pg;
-const DATABASE_URL = process.env.DATABASE_URL || '';
-const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } }) : null;
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { pool, databaseConfigured } from './db.js';
 
 function safeEqual(a:string,b:string){
   const aa=Buffer.from(a); const bb=Buffer.from(b);
   return aa.length===bb.length && timingSafeEqual(aa,bb);
 }
 
-export function databaseConfigured(){ return Boolean(pool); }
+function tokenHash(token:string){
+  return createHash('sha256').update(token).digest('hex');
+}
+
+export { databaseConfigured };
 
 export function strongPassword(password:string){
   return password.length>=15 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
@@ -59,4 +59,36 @@ export async function persistSecurityLog(event:{result:string,username?:string,d
       event.result,event.username||null,event.detail||null,event.ip||null,event.userAgent||null
     ]);
   }catch(e){ console.error('DB security log write failed',e); }
+}
+
+export async function persistSession(token:string,username:string,expiresAt:number){
+  if(!pool) return;
+  await pool.query(`INSERT INTO sessions(token_hash,username,expires_at,revoked_at)
+    VALUES($1,$2,to_timestamp($3/1000.0),NULL)
+    ON CONFLICT(token_hash) DO UPDATE SET username=EXCLUDED.username,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
+    [tokenHash(token),username,expiresAt]);
+}
+
+export async function loadSession(token:string):Promise<{user:string;expiresAt:number}|null>{
+  if(!pool) return null;
+  const r=await pool.query(`SELECT username,extract(epoch from expires_at)*1000 AS expires_ms
+    FROM sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() LIMIT 1`,[tokenHash(token)]);
+  const row=r.rows[0];
+  if(!row) return null;
+  return {user:String(row.username),expiresAt:Number(row.expires_ms)};
+}
+
+export async function revokeSession(token:string){
+  if(!pool) return;
+  await pool.query('UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL',[tokenHash(token)]);
+}
+
+export async function revokeAllSessions(){
+  if(!pool) return;
+  await pool.query('UPDATE sessions SET revoked_at=now() WHERE revoked_at IS NULL');
+}
+
+export async function pruneExpiredSessions(){
+  if(!pool) return;
+  await pool.query('DELETE FROM sessions WHERE expires_at<now() OR revoked_at<now()-interval \'7 days\'');
 }
