@@ -719,6 +719,7 @@ function App() {
         </div>
         <div className="ops-side-spacer"/>
         <button type="button" className="ops-side-btn" onClick={()=>setShowSocialOffice(true)}><span>✦</span>Social Office</button>
+        <a className="ops-side-btn" href={`${import.meta.env.BASE_URL || '/'}sql-academy/`} style={{textDecoration:'none',display:'flex',alignItems:'center',gap:8}}><span>🎓</span>SQL Academy</a>
         <div className="ops-side-status"><span className="dot"/> Connected</div>
       </aside>
       <div className="ops-main-shell">
