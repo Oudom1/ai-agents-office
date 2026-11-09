@@ -1,5 +1,5 @@
 (()=>{
-  const API_PREFIX='https://ai-agents-office-production.up.railway.app/api';
+  const API_ORIGINS=new Set(['https://ai-agents-office-api-v2.onrender.com','https://ai-agents-office-api.onrender.com','https://ai-agents-office-production.up.railway.app']);
   const TOKEN_KEY='ai-office-auth-token-v1';
   const originalFetch=window.fetch.bind(window);
   const DEFAULT_TIMEOUT_MS=30000;
@@ -8,7 +8,8 @@
   window.fetch=async function(input,init={}){
     let url='';
     try{url=typeof input==='string'?input:input instanceof URL?input.href:input.url||''}catch{}
-    if(!url.startsWith(API_PREFIX)) return originalFetch(input,init);
+    let target; try { target=new URL(url,window.location.href); } catch { return originalFetch(input,init); }
+    if(!API_ORIGINS.has(target.origin) || !target.pathname.startsWith('/api/')) return originalFetch(input,init);
 
     const isAuth=/\/api\/auth\/(?:handshake|login|status)(?:\?|$)/i.test(url);
     const timeoutMs=isAuth?AUTH_TIMEOUT_MS:DEFAULT_TIMEOUT_MS;
