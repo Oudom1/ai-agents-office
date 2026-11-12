@@ -128,9 +128,9 @@ if(evidenceurl && (!/^https:\/\/[^ ]+$/i.test(evidenceurl)||!/^https:\/\/(suppor
 if(classification==="Superseded"&&!/^KB\d{4,8}$/.test(replacement)){msg.textContent="Enter the replacement KB when status is Superseded.";return}
 if(classification!=="Needs verification"&&!build){msg.textContent="Specify OS version/build before confirming a classification.";return}
 const key=reviewIdentity(kb,os,build,arch),rows=getReviews(),entry={key,kb,os,build,arch,classification,notes,reviewer,replacement,evidenceurl,updatedAt:new Date().toISOString()};
-const index=rows.findIndex(x=>x.key===key);if(index>=0)rows[index]=entry;else rows.push(entry);
+const index=rows.findIndex(x=>x.key===key),oldClassification=index>=0?rows[index].classification:null;if(index>=0)rows[index]=entry;else rows.push(entry);
 try{localStorage.setItem(reviewStorageKey,JSON.stringify(rows));msg.textContent="Review saved locally. "+statusDescription[classification];renderReviews();showImportedKBs();
-if(classification==="Unsupported"&&(index<0||rows[index]?.classification!=="Unsupported")){
+if(classification==="Unsupported"&&oldClassification!=="Unsupported"){
 addLocalAlerts([{id:"unsupported:"+key+":"+entry.updatedAt,kind:"Manual unsupported classification",kb,message:"Reviewer "+reviewer+" classified "+kb+" as Unsupported for "+os+" "+build+". Evidence: "+evidenceurl,at:entry.updatedAt,read:false}]);
 }
 }
