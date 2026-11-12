@@ -36,7 +36,10 @@ jobs:
           mkdir -p frontend/dist/patch-analysis
           cp patch-analysis/index.html frontend/dist/patch-analysis/index.html
           test -s frontend/dist/patch-analysis/index.html
-          echo "Patch analysis portal is present in deployment artifact"
+          test -s frontend/dist/patch-analysis/detail.html
+          test -s frontend/dist/patch-analysis/intelligence.html
+          grep -q "CVE updates" frontend/dist/patch-analysis/intelligence.html
+          echo "Patch portal, dedicated details and CVE intelligence are included in deployment artifact"
       - uses: actions/configure-pages@v5
         with:
           enablement: true
