@@ -9,6 +9,19 @@
 <div class="grid"><div class="card"><div class="small">Known exploited CVEs (feed)</div><div class="stat" id="count">—</div></div><div class="card"><div class="small">Recent KEV additions (last 30 days)</div><div class="stat" id="recent">—</div></div><div class="card"><div class="small">Feed last published</div><div id="released" style="font-weight:800;margin-top:8px">Not loaded</div></div></div>
 <div class="layout"><section class="card"><h2>1. Updated CVEs from CISA</h2><p class="small">Shows recently added vulnerabilities known to be exploited in the wild. This is <strong>not</strong> a complete list of all newly published CVEs. Use NVD for other vulnerabilities.</p><div class="row"><button id="refresh">Fetch current CISA KEV feed</button><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">Official CISA catalog ↗</a></div><p class="small" id="feedstatus" role="status">No current feed loaded.</p><label for="search">Filter by CVE, product or vendor</label><input id="search" placeholder="e.g. Microsoft, Adobe, CVE-2026-..." autocomplete="off"><div class="feed" id="feed"></div></section>
 <section class="card"><h2>2. CVE verification for a specific patch</h2><p class="small">Cross-check a CVE against the CISA KEV catalog and see its official vulnerability record. A KEV match means known exploitation; no match does not prove safety.</p><label for="cve">CVE identifier</label><input id="cve" placeholder="CVE-2026-12345"><div class="row" style="margin-top:12px"><button id="checkcve">Verify CVE</button><button id="matchportal">Check imported CVEs</button></div><div id="cveresult" class="result">Enter a valid CVE identifier to check its source record.</div><p class="small">Imported CVEs are read locally from this browser only. This feature does not send your corporate inventory to CISA.</p></section>
+<section class="card"><h2>New Microsoft security KB updates</h2>
+<p class="small">Updates from recent Microsoft Security Response Center releases. The feed is scheduled to refresh daily when GitHub Pages deployment succeeds; it does not include every Microsoft driver, optional update or KB.</p>
+<div class="row"><button id="msrefresh">Reload Microsoft updates</button><button id="msexport">Export updates CSV</button></div>
+<p class="small" id="msstatus" role="status">Waiting for published Microsoft KB data...</p>
+<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+<div class="result"><div class="small">Published KBs</div><div class="stat" id="mscount">—</div></div>
+<div class="result"><div class="small">Not in your imported file</div><div class="stat" id="msnew">—</div></div>
+</div>
+<label for="mssearch">Search by KB, CVE or Microsoft product</label><input id="mssearch" type="search" placeholder="KB5132061 or Windows 11">
+<label for="msfilter">Filter</label><select id="msfilter"><option value="">All published</option><option value="new">Not in imported KBs</option></select>
+<p class="small" id="msmatch"></p><div id="mslist" class="feed" style="max-height:400px"></div>
+<div class="banner">Updates are public research candidates, not automatically installed or classified. OS/build compatibility, supersedence and support must be verified separately.</div>
+</section>
 <section class="card"><h2>3. KB applicability / supersedence review</h2><p class="small">Enter a KB number to open official Microsoft references. Select the Windows product and build before assigning a supported, unsupported, superseded, or not-applicable status.</p><div class="two"><div><label for="kb">KB number</label><input id="kb" placeholder="5132061 or KB5132061"></div><div><label for="os">Windows product</label><select id="os"><option value="">Select a product</option><option>Windows 11</option><option>Windows 10</option><option>Windows Server 2025</option><option>Windows Server 2022</option><option>Windows Server 2019</option><option>Windows Server 2016</option><option>Other / Unknown</option></select></div></div><div class="two"><div><label for="build">Version / build</label><input id="build" placeholder="e.g. 22H2 / 20348"></div><div><label for="architecture">Architecture</label><select id="architecture"><option value="">Unknown</option><option>x64</option><option>ARM64</option><option>x86</option></select></div></div><div class="row" style="margin-top:12px"><button id="reviewkb">Generate verification checklist</button></div><div class="result" id="kbresult">Enter a KB and a Windows product to generate relevant official research links and compatibility checks.</div><div class="card" style="margin-top:14px;padding:15px;background:#fbfcfd">
 <h2>Classification & approval</h2>
 <p class="small">Default status is <strong>Needs verification</strong>. Choose a status only after checking the update against the exact OS/build or hardware model and official vendor evidence. The saved decision is a human review, not an automated compatibility finding.</p>
@@ -128,6 +141,71 @@ if(incomingKB && /^KB\d{4,8}$/i.test(incomingKB)){
   $("kb").value=incomingKB.toUpperCase();
   syncReview();
 }
+
+/* Daily MSRC security KB discovery feed. No local corporate data is uploaded. */
+let microsoftFeed=null;
+function importedKBSet(){
+ let records=[];try{records=JSON.parse(localStorage.getItem("patch_analysis_flexible_v2")||"[]")}catch(e){}
+ if(!Array.isArray(records))records=[];
+ return new Set(records.flatMap(r=>[r.patch,r.threat].join(" ").match(/KB\d{4,8}/gi)||[]).map(x=>x.toUpperCase()));
+}
+function showMicrosoftKBs(){
+ const container=$("mslist");
+ if(!microsoftFeed||!Array.isArray(microsoftFeed.items)){container.textContent="No verified Microsoft KB feed is available.";return}
+ const imported=importedKBSet(),q=$("mssearch").value.trim().toLowerCase(),filter=$("msfilter").value;
+ const all=microsoftFeed.items;
+ $("mscount").textContent=all.length.toLocaleString();
+ $("msnew").textContent=all.filter(x=>!imported.has(x.kb)).length.toLocaleString();
+ const filtered=all.filter(x=>(!q||[x.kb,...(x.products||[]),...(x.cves||[])].join(" ").toLowerCase().includes(q))&&(!filter||!imported.has(x.kb)));
+ $("msmatch").textContent=filtered.length+" matching KB records";
+ container.innerHTML=filtered.length?filtered.slice(0,80).map(x=>{
+   const link=/^https:\/\/(?:support\.microsoft\.com|learn\.microsoft\.com|www\.catalog\.update\.microsoft\.com|catalog\.update\.microsoft\.com)\//i.test(x.sourceUrl||"")?x.sourceUrl:"https://www.catalog.update.microsoft.com/Search.aspx?q="+encodeURIComponent(x.kb);
+   return "<div class='item'><div class='row'><strong>"+esc(x.kb)+"</strong><span class='pill'>"+(!imported.has(x.kb)?"New to your imported list":"Already imported")+"</span></div>"+
+     "<p class='small'>MSRC releases: "+esc((x.releases||[]).join(", "))+"</p>"+
+     "<p class='detail'>"+esc((x.products||[]).slice(0,4).join("; ")||"Product not specified")+"</p>"+
+     "<p class='small'>CVEs: "+esc((x.cves||[]).slice(0,8).join(", ")||"None listed")+"</p>"+
+     "<div class='row'>"+fmtLink(link,"Microsoft evidence")+
+     "<button data-microsoft-kb='"+esc(x.kb)+"'>Review this KB</button></div></div>";
+ }).join("")+(filtered.length>80?"<p class='small'>Showing first 80. Search to narrow results.</p>":""):"<p class='small'>No matching Microsoft KBs in the available feed.</p>";
+ container.querySelectorAll("button[data-microsoft-kb]").forEach(b=>b.onclick=()=>{
+   $("kb").value=b.dataset.microsoftKb;
+   $("kb").scrollIntoView({behavior:"smooth",block:"center"});
+   syncReview();
+ });
+}
+async function fetchMicrosoftKBs(){
+ $("msrefresh").disabled=true;$("msstatus").textContent="Loading latest published Microsoft KB data...";
+ try{
+  const res=await fetch("./microsoft-kb-updates.json?refresh="+Date.now(),{cache:"no-store"});
+  if(!res.ok)throw Error("HTTP "+res.status+" — KB feed has not been published");
+  const payload=await res.json();
+  if(!payload||!Array.isArray(payload.items))throw Error("Published file has an invalid format");
+  microsoftFeed=payload;
+  const timestamp=Date.parse(payload.generatedAt),age=Number.isFinite(timestamp)?Math.floor((Date.now()-timestamp)/86400000):null;
+  const isStale=age===null||age>2;
+  $("msstatus").textContent="Feed status: "+(payload.status||"unknown")+" · Generated: "+(payload.generatedAt||"unknown")+" · "+payload.items.length+" KBs"+
+  (isStale?" · STALE OR UNKNOWN FRESHNESS":"")+(payload.failures?.length?" · "+payload.failures.length+" release fetch failures":"")+
+  ". Recent security releases only; not the full Microsoft Update Catalog.";
+  if(payload.status==="unavailable"||!payload.items.length){$("msstatus").textContent+=" No Microsoft KB data was obtained. Retry after the next deployment."; }
+  showMicrosoftKBs();
+ }catch(e){
+  microsoftFeed=null;
+  $("mscount").textContent="—";$("msnew").textContent="—";
+  $("msstatus").textContent="Microsoft KB feed unavailable: "+String(e.message||e)+". No new KB status can be inferred.";
+  showMicrosoftKBs();
+ }finally{$("msrefresh").disabled=false}
+}
+$("msrefresh").onclick=fetchMicrosoftKBs;
+$("mssearch").oninput=showMicrosoftKBs;
+$("msfilter").onchange=showMicrosoftKBs;
+$("msexport").onclick=()=>{
+ if(!microsoftFeed||!microsoftFeed.items.length){$("msstatus").textContent="No KB feed records to export.";return}
+ const headers=["KB","MSRC Releases","Products","CVEs","Microsoft Source","Classification"];
+ const csv=[headers.join(",")].concat(microsoftFeed.items.map(x=>[x.kb,(x.releases||[]).join("; "),(x.products||[]).join("; "),(x.cves||[]).join("; "),x.sourceUrl||"","Needs verification"].map(z=>'"'+String(z||"").replace(/"/g,'""')+'"').join(","))).join("\r\n");
+ const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Microsoft_Security_KB_Updates.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+fetchMicrosoftKBs();
+
 function showImportedKBs(){
 let rows=[];try{rows=JSON.parse(localStorage.getItem("patch_analysis_flexible_v2")||"[]")}catch(e){}
 if(!Array.isArray(rows))rows=[];
