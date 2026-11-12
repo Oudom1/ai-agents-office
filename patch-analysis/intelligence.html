@@ -123,7 +123,11 @@ link.href=URL.createObjectURL(blob);link.download="KB_Classification_Reviews.csv
 };
 ["kb","os","build","architecture"].forEach(id=>$(id).addEventListener("change",syncReview));
 renderReviews();
-
+const incomingKB=new URLSearchParams(location.search).get("kb");
+if(incomingKB && /^KB\d{4,8}$/i.test(incomingKB)){
+  $("kb").value=incomingKB.toUpperCase();
+  syncReview();
+}
 function showImportedKBs(){
 let rows=[];try{rows=JSON.parse(localStorage.getItem("patch_analysis_flexible_v2")||"[]")}catch(e){}
 if(!Array.isArray(rows))rows=[];
