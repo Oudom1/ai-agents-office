@@ -143,14 +143,24 @@ holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").val
 $("kbsearch").addEventListener("input",showImportedKBs);
 showImportedKBs();
 $("reviewkb").onclick=()=>{
-const raw=$("kb").value.trim().toUpperCase().replace(/\s/g,"");
-const kb=/^\d{4,8}$/.test(raw)?"KB"+raw:raw,os=$("os").value,build=$("build").value.trim(),arch=$("architecture").value;
-if(!/^KB\d{4,8}$/.test(kb)){$("kbresult").textContent="Enter a KB number such as 5132061 or KB5132061.";return}
-$("kb").value=kb;
-const term=encodeURIComponent(kb+" "+os+" "+build);
-const catalog="https://www.catalog.update.microsoft.com/Search.aspx?q="+encodeURIComponent(kb);
-const ms="https://support.microsoft.com/search/results?query="+term;
-$("kbresult").innerHTML="<strong>"+esc(kb)+" — Needs verification</strong><p class='small'>Target: "+esc(os||"Not selected — product compatibility cannot yet be determined")+" | Version/build: "+esc(build||"Not supplied")+" | Architecture: "+esc(arch||"Not supplied")+"</p><p class='detail'>"+(!os?"Select the Windows product and OS build to assess applicability. This lookup only provides official references. ":"")+"Verify whether this update is applicable, already installed, superseded, blocked by prerequisites or unsupported by the product lifecycle. Do not mark it unsupported merely because a scanner reported it missing.</p><div class='field'>1. Compare the device's OS build and architecture to the KB's supported products.</div><div class='field'>2. Check Microsoft Update Catalog for replacement/supersedence information.</div><div class='field'>3. Read Microsoft Support release notes for known issues and prerequisites.</div><div class='field'>4. Check Windows lifecycle and whether the OS is still serviced.</div><div class='row' style='margin-top:15px'>"+fmtLink(catalog,"Update Catalog")+fmtLink(ms,"KB release information")+fmtLink("https://learn.microsoft.com/en-us/lifecycle/","Microsoft lifecycle")+"</div><p class='source'>Result: Evidence links generated; compatibility and support status have not been automatically validated.</p>";
+  const raw=$("kb").value.trim().toUpperCase().replace(/\s/g,"");
+  const kb=/^\d{4,8}$/.test(raw)?"KB"+raw:raw;
+  const os=$("os").value,build=$("build").value.trim(),arch=$("architecture").value;
+  if(!/^KB\d{4,8}$/.test(kb)){$("kbresult").textContent="Enter a KB number such as 5132061 or KB5132061.";return}
+  $("kb").value=kb;
+  const catalog="https://www.catalog.update.microsoft.com/Search.aspx?q="+encodeURIComponent(kb);
+  const ms="https://support.microsoft.com/search/results?query="+encodeURIComponent(kb+" "+os+" "+build);
+  const official=kb==="KB5132061"?"https://support.microsoft.com/en-gb/servicing/os/windows-11/2026/11/kb5132061-windows-11-24h2-25h2-26h2-security-update":"";
+  const example=kb==="KB5132061"?
+    "<div class='banner'><strong>Official Microsoft update identified (published November 10, 2026)</strong><p>Microsoft lists KB5132061 for Windows 11 versions 26H2, 25H2, and eligible Windows 11 24H2 Enterprise/Education editions, with OS builds 26300.9974, 26200.9974, and 26100.9974 respectively. The update has prerequisites and servicing stack requirements; read the release notes before deployment.</p>"+fmtLink(official,"Read verified Microsoft release notes")+"<p class='source'>Published update information, not proof this update applies to your specific device. Recheck Microsoft's latest release information.</p></div>":
+    "<div class='banner'>A valid KB identifier was recognized. Official records have <strong>not</strong> been automatically retrieved or evaluated for this KB. Use the links below to validate it.</div>";
+  const mismatch=kb==="KB5132061"&&os&&os!=="Windows 11"?"<p class='small'><strong>OS mismatch warning:</strong> This Microsoft release note lists Windows 11 editions, not the selected "+esc(os)+". Verify other KBs for that product. Do not infer an unsupported status for the operating system itself.</p>":"";
+  $("kbresult").innerHTML="<h3>"+esc(kb)+" — Research lookup complete; device classification pending</h3>"+
+    "<p class='small'>Selected OS: "+esc(os||"Unknown")+" · Build: "+esc(build||"Unknown")+" · Architecture: "+esc(arch||"Unknown")+"</p>"+
+    example+mismatch+
+    "<p class='detail'>To assign a classification, match the manufacturer's applicable versions, installed OS build, architecture, prerequisites, update history and any replacement update. A search link alone cannot verify applicability or supersedence.</p>"+
+    "<div class='row'>"+fmtLink(catalog,"Microsoft Update Catalog")+fmtLink(ms,"Microsoft Support search")+fmtLink("https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information","Windows release history")+fmtLink("https://learn.microsoft.com/en-us/lifecycle/","Product lifecycle")+"</div>"+
+    "<p class='source'>Supported / Unsupported / Superseded / Not applicable status remains Needs verification until supported by vendor evidence and device context.</p>";
 };
 retrieve();
 })();
