@@ -45,6 +45,9 @@ type Task = {
   sourceTaskId?: string;
   blocker?: string;
   providerJobId?: string;
+  reviewRequestedAt?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
 };
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://ai-agents-office-api.onrender.com').replace(/\/$/, '');
@@ -564,11 +567,11 @@ function App() {
 
     // Server confirmation is required: never display false completion.
     try {
-      const response = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/done`, {method:'PATCH'});
+      const response = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/submit-review`, {method:'PATCH'});
       if (!response.ok) {
         setNotice(response.status===404
           ? 'Task is missing from the server. Back up your tasks; this assignment needs to be synchronized.'
-          : `Completion was rejected by the server (HTTP ${response.status}). Task remains open.`);
+          : `Review submission was rejected by the server (HTTP ${response.status}). Task remains open.`);
         return;
       }
     } catch {
@@ -577,13 +580,13 @@ function App() {
     }
 
     patchTask(task.id, {
-      status: 'done', phase: 'completed', completedAt: new Date().toISOString(), blocker: undefined,
-      nextRunAt: isKai ? new Date(Date.now() + KAI_REFRESH_MS).toISOString() : undefined,
+      status: 'review', phase: 'review', reviewRequestedAt: new Date().toISOString(), blocker: undefined,
+      nextRunAt: undefined,
       resultMessage: isKai
-        ? 'Complete — real video file is ready in Google Drive. The next 4-hour cycle can run when free quota is available.'
+        ? 'Submitted — real video file is ready for review.'
         : isLeo
-        ? 'Complete — Leo finished the development task and it is ready for review.'
-        : 'Complete — task finished successfully.'
+        ? 'Submitted — Leo finished the development task and it is ready for review.'
+        : 'Submitted for review — check the evidence, then approve or return it.'
     });
 
     const next = tasks.filter(t => t.id !== task.id && t.agentId === task.agentId && t.status !== 'done')
@@ -599,7 +602,37 @@ function App() {
     else if (task.agentId === 'qa') moveForHandoff('qa','security',task.title,'QA passed · Security review');
     else if (task.agentId === 'security') moveForHandoff('security','cloud',task.title,'Security passed · Ready to deploy');
     else if (task.agentId === 'cloud') moveForHandoff('cloud','manager',task.title,'Deployment complete · Report to Alex');
-    setNotice(isKai ? 'Complete — real video ready in Google Drive' : isLeo ? 'Leo completed the development task' : auto ? 'Complete — task finished' : 'Task completed — progress updated');
+    setNotice(isKai ? 'Kai submitted the real video for review' : isLeo ? 'Leo submitted the development task for review' : auto ? 'Task submitted for review' : 'Task submitted for review');
+  };
+
+  const reviewTask = async (task: Task, action: 'approve'|'return') => {
+    const note = action === 'return' ? window.prompt('What should the agent fix before resubmitting?', task.reviewNote || '') : undefined;
+    if (action === 'return' && note === null) return;
+    try {
+      const response = await authFetch(`${API}/tasks/${encodeURIComponent(task.id)}/review`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action, note: note?.trim() || ''})
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      patchTask(task.id, data);
+      const agent = agents.find(a => a.id === task.agentId);
+      if (action === 'approve') {
+        if (task.agentId === 'developer') moveForHandoff('developer','qa',task.title,'Approved · Ready for QA');
+        else if (task.agentId === 'qa') moveForHandoff('qa','security',task.title,'QA approved · Security review');
+        else if (task.agentId === 'security') moveForHandoff('security','cloud',task.title,'Security approved · Ready to deploy');
+        else if (task.agentId === 'cloud') moveForHandoff('cloud','manager',task.title,'Deployment approved · Report to Alex');
+        else if (agent) updateLocal(task.agentId,{state:'working',currentTask:undefined,destination:agent.home});
+        setNotice('Review approved. Task is complete.');
+      } else {
+        if (agent) updateLocal(task.agentId,{state:'working-task',currentTask:task.title,destination:agent.home});
+        pushHandoff('manager',task.agentId,task.title,'Returned with review feedback');
+        setNotice('Task returned to the agent with your review note.');
+      }
+      await refresh();
+    } catch (error) {
+      setNotice(`Review could not be saved: ${error instanceof Error ? error.message : 'Please retry.'}`);
+    }
   };
 
   const toggleBlocker = async (task: Task) => {
@@ -765,10 +798,11 @@ function App() {
           <div className="task-pipeline">
             {[
               {key:'todo',label:'Assigned',match:(t:Task)=>t.status!=='done'&&!t.blocker&&['queued','active',undefined].includes(t.phase)},
-              {key:'work',label:'Working',match:(t:Task)=>t.status!=='done'&&!t.blocker&&!['queued','active',undefined].includes(t.phase)},
-              {key:'blocked',label:'Blocked',match:(t:Task)=>t.status!=='done'&&(!!t.blocker||t.status==='blocked')},
+              {key:'work',label:'Working',match:(t:Task)=>t.status!=='done'&&t.status!=='review'&&!t.blocker&&!['queued','active',undefined].includes(t.phase)},
+              {key:'review',label:'Review',match:(t:Task)=>t.status==='review'},
+              {key:'blocked',label:'Blocked',match:(t:Task)=>t.status!=='done'&&t.status!=='review'&&(!!t.blocker||t.status==='blocked')},
               {key:'done',label:'Completed',match:(t:Task)=>t.status==='done'}
-            ].map(col=><div className="task-pipeline-col" key={col.key}><div className="task-pipeline-title"><b>{col.label}</b><span>{tasks.filter(col.match).length}</span></div>{tasks.filter(col.match).slice(0,20).map(t=><article className="ops-task-card" key={t.id}><div className="ops-task-agent">{agents.find(a=>a.id===t.agentId)?.name||'Agent'} · {t.phase||t.status}</div><h4>{t.title}</h4>{t.blocker&&<p className="ops-task-blocker">⚠ {t.blocker}</p>}<div className="ops-task-evidence">{t.driveUrl&&<a href={t.driveUrl} target="_blank" rel="noreferrer">Drive evidence</a>}{t.videoUrl&&<a href={t.videoUrl} target="_blank" rel="noreferrer">Output</a>}{!t.driveUrl&&!t.videoUrl&&<span>Evidence pending</span>}</div></article>)}{!tasks.some(col.match)&&<div className="ops-empty">No tasks</div>}</div>)}
+            ].map(col=><div className="task-pipeline-col" key={col.key}><div className="task-pipeline-title"><b>{col.label}</b><span>{tasks.filter(col.match).length}</span></div>{tasks.filter(col.match).slice(0,20).map(t=><article className="ops-task-card" key={t.id}><div className="ops-task-agent">{agents.find(a=>a.id===t.agentId)?.name||'Agent'} · {t.phase||t.status}</div><h4>{t.title}</h4>{t.blocker&&<p className="ops-task-blocker">⚠ {t.blocker}</p>}{t.reviewNote&&<p className="ops-task-blocker">Review note: {t.reviewNote}</p>}{t.status==='review'&&<div style={{display:'flex',gap:6,marginTop:9}}><button type="button" onClick={()=>void reviewTask(t,'approve')} style={{flex:1,padding:'7px 8px',borderRadius:7,border:'1px solid #2fbb83',background:'#0d3b2c',color:'#d8ffec',fontWeight:800,cursor:'pointer'}}>Approve</button><button type="button" onClick={()=>void reviewTask(t,'return')} style={{flex:1,padding:'7px 8px',borderRadius:7,border:'1px solid #e2a54e',background:'#3b2d17',color:'#ffedc9',fontWeight:800,cursor:'pointer'}}>Return to agent</button></div>}<div className="ops-task-evidence">{t.driveUrl&&<a href={t.driveUrl} target="_blank" rel="noreferrer">Drive evidence</a>}{t.videoUrl&&<a href={t.videoUrl} target="_blank" rel="noreferrer">Output</a>}{!t.driveUrl&&!t.videoUrl&&<span>Evidence pending</span>}</div></article>)}{!tasks.some(col.match)&&<div className="ops-empty">No tasks</div>}</div>)}
           </div>
         </section>}
 
