@@ -674,6 +674,44 @@ app.patch('/api/tasks/:id', requireAuth, async (req,res)=>{
   res.json(task);
 });
 
+app.patch('/api/tasks/:id/submit-review', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task) return res.status(404).json({error:'Task not found'});
+  if(task.status==='done') return res.status(409).json({error:'Completed tasks cannot be resubmitted'});
+  task.status='review';
+  task.phase='review';
+  task.reviewRequestedAt=new Date().toISOString();
+  task.reviewNote=undefined;
+  task.blocker=undefined;
+  const agent=agents.find(a=>a.id===task.agentId);
+  if(agent){agent.state='working';delete (agent as any).currentTask;(agent as any).destination=agent.home;}
+  try{await persistTaskState(task);if(agent)await persistAgentState(agent);}
+  catch(e){console.error('Review submission persistence failed',e);return res.status(503).json({error:'Review submission persistence failed'});}
+  res.json(task);
+});
+
+app.patch('/api/tasks/:id/review', requireAuth, async (req,res)=>{
+  const task:any=tasks.find(t=>t.id===req.params.id);
+  if(!task) return res.status(404).json({error:'Task not found'});
+  if(task.status!=='review') return res.status(409).json({error:'Task is not waiting for review'});
+  const action=String(req.body?.action||'');
+  if(action!=='approve'&&action!=='return') return res.status(400).json({error:'action must be approve or return'});
+  const now=new Date().toISOString();
+  task.reviewedAt=now;
+  task.reviewNote=String(req.body?.note||'').trim()||undefined;
+  const agent=agents.find(a=>a.id===task.agentId);
+  if(action==='approve'){
+    task.status='done';task.phase='completed';task.completedAt=now;task.blocker=undefined;
+    if(agent){agent.state='working';delete (agent as any).currentTask;(agent as any).destination=agent.home;}
+  }else{
+    task.status='active';task.phase='returned';task.completedAt=undefined;
+    if(agent){agent.state='working-task';(agent as any).currentTask=task.title;(agent as any).destination=agent.home;}
+  }
+  try{await persistTaskState(task);if(agent)await persistAgentState(agent);}
+  catch(e){console.error('Review decision persistence failed',e);return res.status(503).json({error:'Review decision persistence failed'});}
+  res.json(task);
+});
+
 app.patch('/api/tasks/:id/done', requireAuth, async (req,res)=>{
   const task=tasks.find(t=>t.id===req.params.id);
   if(!task) return res.status(404).json({error:'Task not found'});
