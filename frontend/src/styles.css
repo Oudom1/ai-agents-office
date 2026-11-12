@@ -323,7 +323,7 @@ body{background-color:#030b23;background-image:linear-gradient(#1b47721a 1px,tra
 .project-room-icon{width:52px;height:52px;border-radius:12px;display:grid;place-items:center;background:#102d50;border:1px solid #2f78ad;font-size:23px;color:#69e8ff}
 .project-room h3{margin:0 0 5px;font-size:16px}.project-room p{margin:0;color:#8aaac0;font-size:11px;line-height:1.45}
 .project-room-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:9px;color:#6bd8e7}
-.task-pipeline{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
+.task-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
 .task-pipeline-col{background:#071427;border:1px solid #1d4263;border-radius:12px;padding:10px;min-height:280px}
 .task-pipeline-title{display:flex;justify-content:space-between;align-items:center;padding:4px 3px 10px;border-bottom:1px solid #193a57;margin-bottom:8px}.task-pipeline-title span{font-size:10px;padding:3px 7px;border-radius:999px;background:#14344f}
 .ops-task-card{padding:10px;border:1px solid #214c71;border-radius:9px;background:#0a1b31;margin:8px 0}.ops-task-card h4{margin:4px 0 8px;font-size:12px;line-height:1.4}.ops-task-agent{font-size:8px;color:#65dff0;text-transform:uppercase;letter-spacing:.7px}.ops-task-blocker{font-size:9px;color:#ff9aac}.ops-task-evidence{display:flex;gap:8px;flex-wrap:wrap;font-size:9px}.ops-task-evidence a{color:#82d9ff}.ops-task-evidence span{color:#647f91}.ops-empty{padding:20px 8px;text-align:center;color:#58738a;font-size:10px}
