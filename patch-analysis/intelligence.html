@@ -230,11 +230,13 @@ async function fetchMicrosoftKBs(){
   ". Recent security releases only; not the full Microsoft Update Catalog.";
   if(payload.status==="unavailable"||!payload.items.length){$("msstatus").textContent+=" No Microsoft KB data was obtained. Retry after the next deployment."; }
   showMicrosoftKBs();
+  if($("kb").value.trim())renderKBResearch();
  }catch(e){
   microsoftFeed=null;
   $("mscount").textContent="—";$("msnew").textContent="—";
   $("msstatus").textContent="Microsoft KB feed unavailable: "+String(e.message||e)+". No new KB status can be inferred.";
   showMicrosoftKBs();
+  if($("kb").value.trim())renderKBResearch();
  }finally{$("msrefresh").disabled=false}
 }
 $("msrefresh").onclick=fetchMicrosoftKBs;
@@ -262,26 +264,52 @@ holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").val
 }
 $("kbsearch").addEventListener("input",showImportedKBs);
 showImportedKBs();
-$("reviewkb").onclick=()=>{
+function renderKBResearch(){
   const raw=$("kb").value.trim().toUpperCase().replace(/\s/g,"");
   const kb=/^\d{4,8}$/.test(raw)?"KB"+raw:raw;
   const os=$("os").value,build=$("build").value.trim(),arch=$("architecture").value;
-  if(!/^KB\d{4,8}$/.test(kb)){$("kbresult").textContent="Enter a KB number such as 5132061 or KB5132061.";return}
-  $("kb").value=kb;
+  if(!raw){$("kbresult").innerHTML="<p class='small'>Enter a KB number to search the latest published Microsoft security update feed.</p>";return}
+  if(!/^KB\d{4,8}$/.test(kb)){
+    $("kbresult").innerHTML="<p class='small'>Enter a valid KB number such as 5132061 or KB5132061.</p>";return;
+  }
   const catalog="https://www.catalog.update.microsoft.com/Search.aspx?q="+encodeURIComponent(kb);
   const ms="https://support.microsoft.com/search/results?query="+encodeURIComponent(kb+" "+os+" "+build);
-  const official=kb==="KB5132061"?"https://support.microsoft.com/en-gb/servicing/os/windows-11/2026/11/kb5132061-windows-11-24h2-25h2-26h2-security-update":"";
-  const example=kb==="KB5132061"?
-    "<div class='banner'><strong>Official Microsoft update identified (published November 10, 2026)</strong><p>Microsoft lists KB5132061 for Windows 11 versions 26H2, 25H2, and eligible Windows 11 24H2 Enterprise/Education editions, with OS builds 26300.9974, 26200.9974, and 26100.9974 respectively. The update has prerequisites and servicing stack requirements; read the release notes before deployment.</p>"+fmtLink(official,"Read verified Microsoft release notes")+"<p class='source'>Published update information, not proof this update applies to your specific device. Recheck Microsoft's latest release information.</p></div>":
-    "<div class='banner'>A valid KB identifier was recognized. Official records have <strong>not</strong> been automatically retrieved or evaluated for this KB. Use the links below to validate it.</div>";
-  const mismatch=kb==="KB5132061"&&os&&os!=="Windows 11"?"<p class='small'><strong>OS mismatch warning:</strong> This Microsoft release note lists Windows 11 editions, not the selected "+esc(os)+". Verify other KBs for that product. Do not infer an unsupported status for the operating system itself.</p>":"";
-  $("kbresult").innerHTML="<h3>"+esc(kb)+" — Research lookup complete; device classification pending</h3>"+
+  const feedItem=microsoftFeed?.items?.find(x=>String(x.kb||"").toUpperCase()===kb);
+  const timestamp=microsoftFeed?.generatedAt||"";
+  const stale=!timestamp||!Number.isFinite(Date.parse(timestamp))||(Date.now()-Date.parse(timestamp)>48*3600*1000);
+  let evidence;
+  if(feedItem){
+    const url=/^https:\/\/(?:support\.microsoft\.com|learn\.microsoft\.com|(?:www\.)?catalog\.update\.microsoft\.com)\//i.test(feedItem.sourceUrl||"")?feedItem.sourceUrl:catalog;
+    evidence="<div class='banner'><strong>Microsoft security update reference found</strong>"+
+      "<p>Microsoft products: "+esc((feedItem.products||[]).slice(0,15).join("; ")||"Not specified in the available feed")+"</p>"+
+      "<p>Related CVEs: "+esc((feedItem.cves||[]).slice(0,15).join(", ")||"Not specified")+"</p>"+
+      "<p>MSRC release periods: "+esc((feedItem.releases||[]).join(", ")||"Unknown")+"</p>"+
+      fmtLink(url,"Open official Microsoft reference")+
+      "<p class='source'>Information from the published MSRC feed, generated "+esc(timestamp||"at an unknown time")+(stale?" (stale or unverified freshness)":"")+". This is not a device-specific compatibility result.</p></div>";
+  }else{
+    evidence="<div class='banner'><strong>"+(microsoftFeed?.status==="ok"||microsoftFeed?.status==="partial"?"No matching KB in the available MSRC security feed":"Microsoft update feed is not available")+"</strong>"+
+      "<p>"+(microsoftFeed?.items?.length?"The feed covers recent Microsoft security releases only. A missing entry does not mean this KB is invalid, unsupported, or superseded.":"The portal cannot retrieve authoritative KB details at present. Open Microsoft's links below to research this update.")+"</p></div>";
+  }
+  const knownProducts=(feedItem?.products||[]).map(x=>String(x).toLowerCase());
+  const osMatch=os&&knownProducts.length?knownProducts.some(x=>x.includes(os.toLowerCase())):false;
+  const specificity=os&&knownProducts.length&&!osMatch?"<p class='small'><strong>Potential product mismatch:</strong> The selected product does not match a product label in the MSRC feed. Check Microsoft's official supported products before drawing any conclusion.</p>":"";
+  $("kbresult").innerHTML="<h3>"+esc(kb)+" — "+(feedItem?"Microsoft security reference found":"KB research lookup")+"; device classification pending</h3>"+
     "<p class='small'>Selected OS: "+esc(os||"Unknown")+" · Build: "+esc(build||"Unknown")+" · Architecture: "+esc(arch||"Unknown")+"</p>"+
-    example+mismatch+
-    "<p class='detail'>To assign a classification, match the manufacturer's applicable versions, installed OS build, architecture, prerequisites, update history and any replacement update. A search link alone cannot verify applicability or supersedence.</p>"+
-    "<div class='row'>"+fmtLink(catalog,"Microsoft Update Catalog")+fmtLink(ms,"Microsoft Support search")+fmtLink("https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information","Windows release history")+fmtLink("https://learn.microsoft.com/en-us/lifecycle/","Product lifecycle")+"</div>"+
-    "<p class='source'>Supported / Unsupported / Superseded / Not applicable status remains Needs verification until supported by vendor evidence and device context.</p>";
-};
+    evidence+specificity+
+    "<p class='detail'>To classify this update, verify its supported products, your installed OS build, architecture, prerequisites, supersedence information and product lifecycle. A KB search alone cannot determine compatibility.</p>"+
+    "<div class='row'>"+fmtLink(catalog,"Microsoft Update Catalog")+fmtLink(ms,"Microsoft Support search")+
+    fmtLink("https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information","Windows release history")+
+    fmtLink("https://learn.microsoft.com/en-us/lifecycle/","Product lifecycle")+"</div>"+
+    "<p class='source'>Current status: Needs verification until validated against the target device and official evidence.</p>";
+}
+$("reviewkb").onclick=renderKBResearch;
+let kbQueryDebounce;
+$("kb").addEventListener("input",()=>{
+  clearTimeout(kbQueryDebounce);
+  kbQueryDebounce=setTimeout(renderKBResearch,350);
+});
+["os","build","architecture"].forEach(id=>$(id).addEventListener("change",renderKBResearch));
+
 retrieve();
 })();
 </script></body></html>
