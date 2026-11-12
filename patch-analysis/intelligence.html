@@ -3,12 +3,26 @@
 <style>
 :root{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:#f4f5f7;color:#16191f;color-scheme:light}
 *{box-sizing:border-box}body{margin:0}header{padding:20px max(20px,calc((100vw - 1260px)/2));background:white;border-bottom:1px solid #e2e5eb}main{max-width:1260px;padding:24px 18px;margin:auto}h1{margin:0;font-size:25px}h2{font-size:18px;margin:0 0 10px}p{line-height:1.5}.small{font-size:13px;color:#556274}.layout{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{padding:20px;background:white;border:1px solid #dfe4ec;border-radius:14px;box-shadow:0 2px 8px #10182808;margin-bottom:16px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}button,.button{border:1px solid #111;background:#111;color:white;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}button:hover,.button:hover{background:#333}button:disabled{opacity:.45;cursor:wait}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd3dd;border-radius:9px;background:white;color:#111;font:inherit}label{font-size:12px;color:#334155;display:block;margin:12px 0 6px;font-weight:650}a{color:#1247a6}.stat{font-size:26px;font-weight:800}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.pill{display:inline-block;border-radius:30px;padding:4px 9px;background:#e9edf3;color:#1e293b;font-weight:700;font-size:12px}.pill.danger{background:#ffe6e6;color:#a11}.pill.good{background:#e4f6ec;color:#11603a}.banner{padding:12px;border-left:3px solid #111;background:#f6f7f9;font-size:13px;line-height:1.55}.feed{max-height:550px;overflow:auto}.item{padding:13px 0;border-bottom:1px solid #e7e9ed}.item:last-child{border-bottom:0}.item strong{display:block;line-height:1.5}.item a{font-weight:700}.detail{font-size:13px;color:#374151;line-height:1.5}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none}.result{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-top:15px}.result p{margin:7px 0}.source{font-size:12px;color:#64748b;overflow-wrap:anywhere}.field{font-size:13px;padding:9px 0;border-bottom:1px solid #edf0f3}@media(max-width:800px){.layout,.grid,.two{grid-template-columns:1fr}} 
+.pill.supported{background:#d8f5e4;color:#08763c}.pill.unsupported{background:#ffe1e1;color:#b42318}.pill.superseded{background:#e9e9eb;color:#35383f}.pill.not-applicable{background:#e9e9eb;color:#35383f}.pill.needs-verification{background:#ffe7d6;color:#a44813}.classifybar{display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}.classifybar select{max-width:240px}.audit-entry{border-top:1px solid #e3e7ed;padding:10px 0}.subtle{font-size:12px;color:#637087}
 </style></head><body><header><div class="row"><a class="button" href="./index.html">← Patch Portal</a><div><h1>CVE updates & KB support review</h1><div class="small">Official threat intelligence · evidence-based applicability · no unsupported claims</div></div></div></header>
 <main>
 <div class="grid"><div class="card"><div class="small">Known exploited CVEs (feed)</div><div class="stat" id="count">—</div></div><div class="card"><div class="small">Recent KEV additions (last 30 days)</div><div class="stat" id="recent">—</div></div><div class="card"><div class="small">Feed last published</div><div id="released" style="font-weight:800;margin-top:8px">Not loaded</div></div></div>
 <div class="layout"><section class="card"><h2>1. Updated CVEs from CISA</h2><p class="small">Shows recently added vulnerabilities known to be exploited in the wild. This is <strong>not</strong> a complete list of all newly published CVEs. Use NVD for other vulnerabilities.</p><div class="row"><button id="refresh">Fetch current CISA KEV feed</button><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">Official CISA catalog ↗</a></div><p class="small" id="feedstatus" role="status">No current feed loaded.</p><label for="search">Filter by CVE, product or vendor</label><input id="search" placeholder="e.g. Microsoft, Adobe, CVE-2026-..." autocomplete="off"><div class="feed" id="feed"></div></section>
 <section class="card"><h2>2. CVE verification for a specific patch</h2><p class="small">Cross-check a CVE against the CISA KEV catalog and see its official vulnerability record. A KEV match means known exploitation; no match does not prove safety.</p><label for="cve">CVE identifier</label><input id="cve" placeholder="CVE-2026-12345"><div class="row" style="margin-top:12px"><button id="checkcve">Verify CVE</button><button id="matchportal">Check imported CVEs</button></div><div id="cveresult" class="result">Enter a valid CVE identifier to check its source record.</div><p class="small">Imported CVEs are read locally from this browser only. This feature does not send your corporate inventory to CISA.</p></section>
-<section class="card"><h2>3. KB applicability / supersedence review</h2><p class="small">A KB number alone cannot prove whether a patch is applicable, superseded, unsupported or unsafe. Select the affected OS and check Microsoft evidence before assigning status.</p><div class="two"><div><label for="kb">KB number</label><input id="kb" placeholder="KB503xxxx"></div><div><label for="os">Windows product</label><select id="os"><option value="">Select a product</option><option>Windows 11</option><option>Windows 10</option><option>Windows Server 2025</option><option>Windows Server 2022</option><option>Windows Server 2019</option><option>Windows Server 2016</option><option>Other / Unknown</option></select></div></div><div class="two"><div><label for="build">Version / build</label><input id="build" placeholder="e.g. 22H2 / 20348"></div><div><label for="architecture">Architecture</label><select id="architecture"><option value="">Unknown</option><option>x64</option><option>ARM64</option><option>x86</option></select></div></div><div class="row" style="margin-top:12px"><button id="reviewkb">Generate verification checklist</button></div><div class="result" id="kbresult">Enter a KB and a Windows product to generate relevant official research links and compatibility checks.</div><div style="margin-top:16px"><h2 style="font-size:15px">Imported KBs needing verification</h2><p class="small">Read from locally saved patch records. Click a KB to populate the review form. No automatic unsupported classification is made.</p><div id="importedkb" class="feed" style="max-height:240px"></div></div></section>
+<section class="card"><h2>3. KB applicability / supersedence review</h2><p class="small">A KB number alone cannot prove whether a patch is applicable, superseded, unsupported or unsafe. Select the affected OS and check Microsoft evidence before assigning status.</p><div class="two"><div><label for="kb">KB number</label><input id="kb" placeholder="KB503xxxx"></div><div><label for="os">Windows product</label><select id="os"><option value="">Select a product</option><option>Windows 11</option><option>Windows 10</option><option>Windows Server 2025</option><option>Windows Server 2022</option><option>Windows Server 2019</option><option>Windows Server 2016</option><option>Other / Unknown</option></select></div></div><div class="two"><div><label for="build">Version / build</label><input id="build" placeholder="e.g. 22H2 / 20348"></div><div><label for="architecture">Architecture</label><select id="architecture"><option value="">Unknown</option><option>x64</option><option>ARM64</option><option>x86</option></select></div></div><div class="row" style="margin-top:12px"><button id="reviewkb">Generate verification checklist</button></div><div class="result" id="kbresult">Enter a KB and a Windows product to generate relevant official research links and compatibility checks.</div><div class="card" style="margin-top:14px;padding:15px;background:#fbfcfd">
+<h2>Classification & approval</h2>
+<p class="small">Default status is <strong>Needs verification</strong>. Choose a status only after checking the update against the exact OS/build or hardware model and official vendor evidence. The saved decision is a human review, not an automated compatibility finding.</p>
+<label for="classification">Classification</label><select id="classification"><option value="Needs verification">Needs verification</option><option value="Supported">Supported</option><option value="Unsupported">Unsupported</option><option value="Superseded">Superseded</option><option value="Not applicable">Not applicable</option></select>
+<label for="evidenceurl">Official vendor evidence URL</label><input id="evidenceurl" type="url" placeholder="https://support.microsoft.com/...">
+<label for="replacement">Replacement KB (when superseded)</label><input id="replacement" placeholder="e.g. KB5071546">
+<label for="reviewnotes">Reason / verification notes</label><textarea id="reviewnotes" rows="3" placeholder="Supported OS/build, evidence checked, reason for decision, limitations..."></textarea>
+<label for="reviewer">Reviewed by</label><input id="reviewer" placeholder="Administrator / reviewer">
+<div class="row" style="margin-top:13px"><button id="saveclass">Save reviewed classification</button><button id="resetclass" type="button">Clear form</button></div>
+<p class="small" role="status" id="classmessage">No classification saved for this update/device context.</p>
+</div>
+<div class="card" style="margin-top:14px;padding:15px;background:#fbfcfd"><h2>Saved classifications</h2><div class="classifybar"><select id="classfilter"><option value="">All statuses</option><option>Supported</option><option>Unsupported</option><option>Superseded</option><option>Not applicable</option><option>Needs verification</option></select><button id="exportclasses">Export reviewed CSV</button></div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px" id="classcounts"></div>
+<div id="classlist" class="feed" style="max-height:330px"></div></div><div style="margin-top:16px"><h2 style="font-size:15px">Imported KBs needing verification</h2><p class="small">Read from locally saved patch records. Click a KB to populate the review form. No automatic unsupported classification is made.</p><div id="importedkb" class="feed" style="max-height:240px"></div></div></section>
 <section class="card"><h2>4. Prioritization & operating rules</h2><div class="field"><span class="pill danger">Known exploited</span> CISA confirms observed exploitation. Verify whether affected software exists in your environment.</div><div class="field"><span class="pill">Not in KEV</span> No KEV listing is found in the loaded feed. This does not mean unexploitable.</div><div class="field"><span class="pill">KB requires review</span> Assess OS build, architecture, installation prerequisites, product lifecycle and supersedence using Microsoft documentation.</div><div class="field"><span class="pill good">Supported / applicable</span> Assign this status only after validating Microsoft evidence and the actual installed device version.</div><div class="banner" style="margin-top:15px">This page provides public-source research and an operator checklist. It does not automatically determine KB supportability or replace the currently unconfigured AI research backend. No updates are deployed to endpoints from this page.</div><p><a href="https://nvd.nist.gov/vuln/search" target="_blank" rel="noopener noreferrer">NIST NVD vulnerability search ↗</a></p><p><a href="https://learn.microsoft.com/en-us/lifecycle/" target="_blank" rel="noopener noreferrer">Microsoft product lifecycle ↗</a></p></section></div>
 </main><script>
 (()=>{
@@ -48,14 +62,76 @@ $("feed").innerHTML=matches.length?matches.map(v=>"<div class='item'><div class=
 $("refresh").onclick=retrieve;$("search").oninput=display;
 $("checkcve").onclick=()=>{const id=$("cve").value.trim().toUpperCase();if(!cveRegex.test(id)){$("cveresult").textContent="Enter a valid CVE identifier, e.g. CVE-2026-12345.";return}const match=kev.get(id);$("cveresult").innerHTML="<strong>"+esc(id)+"</strong><p>"+(feed?(match?"<span class='pill danger'>Listed in CISA KEV</span> Added "+esc(match.dateAdded)+" — "+esc(match.vulnerabilityName||"")+"<p>"+esc(match.shortDescription||"")+"</p>":"<span class='pill'>Not listed in loaded KEV feed</span> This does not establish that exploitation is impossible."):"CISA feed not loaded. Click Fetch current CISA KEV feed before checking status.")+"</p><div class='row'>"+fmtLink(nvd(id),"NIST NVD")+fmtLink(cveUrl(id),"CVE Record")+"</div>"};
 $("matchportal").onclick=()=>{if(!feed){$("cveresult").textContent="Load CISA KEV first.";return}let rows=[];try{rows=JSON.parse(localStorage.getItem("patch_analysis_flexible_v2")||"[]")}catch(e){}if(!Array.isArray(rows)){rows=[]}const match=rows.map(r=>({r,id:([r.cve,r.threat,r.patch].join(" ").match(/CVE-\d{4}-\d{4,}/i)||[])[0]})).filter(x=>x.id&&kev.has(x.id.toUpperCase()));$("cveresult").innerHTML="<strong>"+match.length+" imported entries match the current CISA KEV catalog</strong><p class='small'>Matches refer to imported identifiers, not proof that devices run affected versions.</p>"+match.slice(0,30).map(x=>"<div class='field'>"+fmtLink(nvd(x.id.toUpperCase()),x.id.toUpperCase())+" · "+esc(x.r.threat||x.r.product||"Imported finding")+"</div>").join("");};
+
+const reviewStorageKey="patch_analysis_kb_classification_v1";
+const validStatuses=["Supported","Unsupported","Superseded","Not applicable","Needs verification"];
+const statusDescription={
+"Supported":"Vendor evidence confirms update applicability to the specified OS/device; pilot and deploy.",
+"Unsupported":"Vendor explicitly does not support this OS/device/version; do not deploy.",
+"Superseded":"A newer update replaces this one; confirm replacement applicability before deploying.",
+"Not applicable":"Device, OS, architecture or installed state does not match; document exclusion.",
+"Needs verification":"Insufficient evidence to determine compatibility; investigate before deploying."
+};
+function getReviews(){try{const rows=JSON.parse(localStorage.getItem(reviewStorageKey)||"[]");return Array.isArray(rows)?rows:[]}catch(e){return []}}
+function reviewIdentity(kb,os,build,arch){return [kb.trim().toUpperCase(),os.trim().toLowerCase(),build.trim().toLowerCase(),arch.trim().toLowerCase()].join("|")}
+function statusChip(v){return "<span class='pill "+esc(v.toLowerCase().replace(/\s+/g,"-"))+"'>"+esc(v)+"</span>"}
+function selectedReview(){
+const key=reviewIdentity($("kb").value,$("os").value,$("build").value,$("architecture").value);
+return getReviews().find(x=>x.key===key)
+}
+function syncReview(){
+const r=selectedReview();
+$("classification").value=r?.classification||"Needs verification";
+$("evidenceurl").value=r?.evidenceurl||"";
+$("reviewnotes").value=r?.notes||"";
+$("replacement").value=r?.replacement||"";
+$("reviewer").value=r?.reviewer||"";
+$("classmessage").textContent=r?"Saved review from "+r.updatedAt+". Changes are not automatically revalidated.":"No classification saved for this KB and device context.";
+}
+function renderReviews(){
+const all=getReviews();const filter=$("classfilter").value;const shown=all.filter(r=>!filter||r.classification===filter);
+$("classcounts").innerHTML=validStatuses.map(v=>"<div class='result' style='margin-top:0;padding:7px'>"+statusChip(v)+"<div style='font-weight:800;margin-top:5px'>"+all.filter(r=>r.classification===v).length+"</div></div>").join("");
+$("classlist").innerHTML=shown.length?shown.slice().reverse().map(r=>"<div class='audit-entry'><div class='row'>"+statusChip(r.classification)+" <strong>"+esc(r.kb)+"</strong><span class='small'>"+esc(r.os)+" · "+esc(r.build||"build unspecified")+" · "+esc(r.arch||"architecture unspecified")+"</span></div><p class='small'>"+esc(r.notes||"No notes")+"</p><div class='subtle'>Reviewed by "+esc(r.reviewer||"Unknown")+" on "+esc(r.updatedAt)+"</div>"+(r.evidenceurl?"<p>"+fmtLink(r.evidenceurl,"Official evidence")+"</p>":"")+"<button data-load='"+esc(r.key)+"'>Edit review</button></div>").join(""):"<p class='small'>No reviews match this filter.</p>";
+$("classlist").querySelectorAll("button[data-load]").forEach(b=>b.onclick=()=>{
+const row=all.find(x=>x.key===b.dataset.load);if(!row)return;
+$("kb").value=row.kb;$("os").value=row.os;$("build").value=row.build;$("architecture").value=row.arch;
+syncReview();$("classification").scrollIntoView({behavior:"smooth",block:"center"});
+});
+}
+$("saveclass").onclick=()=>{
+const kb=$("kb").value.trim().toUpperCase().replace(/\s/g,""),os=$("os").value,build=$("build").value.trim(),arch=$("architecture").value;
+const classification=$("classification").value,notes=$("reviewnotes").value.trim(),reviewer=$("reviewer").value.trim(),replacement=$("replacement").value.trim().toUpperCase(),evidenceurl=$("evidenceurl").value.trim();
+const msg=$("classmessage");
+if(!/^KB\d{4,8}$/.test(kb)||!os){msg.textContent="Select a valid KB and Windows product before classifying.";return}
+if(!validStatuses.includes(classification)){msg.textContent="Invalid classification.";return}
+if(classification!=="Needs verification" && (!notes||!reviewer||!evidenceurl)){msg.textContent="A reason, reviewer and official evidence URL are required for a reviewed classification.";return}
+if(evidenceurl && (!/^https:\/\/[^ ]+$/i.test(evidenceurl)||!/^https:\/\/(support\.microsoft\.com|learn\.microsoft\.com|www\.catalog\.update\.microsoft\.com|catalog\.update\.microsoft\.com|[^ ]+\.(?:dell\.com|hp\.com|lenovo\.com))\//i.test(evidenceurl))){msg.textContent="Use an official Microsoft or manufacturer HTTPS evidence link.";return}
+if(classification==="Superseded"&&!/^KB\d{4,8}$/.test(replacement)){msg.textContent="Enter the replacement KB when status is Superseded.";return}
+if(classification!=="Needs verification"&&!build){msg.textContent="Specify OS version/build before confirming a classification.";return}
+const key=reviewIdentity(kb,os,build,arch),rows=getReviews(),entry={key,kb,os,build,arch,classification,notes,reviewer,replacement,evidenceurl,updatedAt:new Date().toISOString()};
+const index=rows.findIndex(x=>x.key===key);if(index>=0)rows[index]=entry;else rows.push(entry);
+try{localStorage.setItem(reviewStorageKey,JSON.stringify(rows));msg.textContent="Review saved locally. "+statusDescription[classification];renderReviews();showImportedKBs()}
+catch(e){msg.textContent="Unable to store review; export your existing records and check browser storage."}
+};
+$("resetclass").onclick=()=>{$("classification").value="Needs verification";$("evidenceurl").value="";$("reviewnotes").value="";$("reviewer").value="";$("replacement").value="";$("classmessage").textContent="Review form cleared; saved classification unchanged."};
+$("classfilter").onchange=renderReviews;
+$("exportclasses").onclick=()=>{
+const headers=["kb","os","build","arch","classification","replacement","evidenceurl","notes","reviewer","updatedAt"];
+const lines=[headers.join(",")].concat(getReviews().map(r=>headers.map(k=>'"'+String(r[k]??"").replace(/"/g,'""')+'"').join(",")));
+const blob=new Blob([lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),link=document.createElement("a");
+link.href=URL.createObjectURL(blob);link.download="KB_Classification_Reviews.csv";document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1500);
+};
+["kb","os","build","architecture"].forEach(id=>$(id).addEventListener("change",syncReview));
+renderReviews();
+
 function showImportedKBs(){
 let rows=[];try{rows=JSON.parse(localStorage.getItem("patch_analysis_flexible_v2")||"[]")}catch(e){}
 if(!Array.isArray(rows))rows=[];
 const kbs=[...new Set(rows.flatMap(r=>([r.patch,r.threat].join(" ").match(/KB\d{4,8}/gi)||[]).map(v=>v.toUpperCase())))].sort();
 const holder=$("importedkb");
 if(!kbs.length){holder.innerHTML="<p class='small'>No imported KB identifiers are saved in this browser.</p>";return}
-holder.innerHTML=kbs.slice(0,120).map(k=>"<div class='field'><button data-kb='"+esc(k)+"' style='padding:5px 10px'>"+esc(k)+"</button> <span class='pill'>Needs OS/build verification</span></div>").join("")+(kbs.length>120?"<p class='small'>First 120 of "+kbs.length+" KB identifiers shown.</p>":"");
-holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").value=b.dataset.kb;$("kb").focus()})
+holder.innerHTML=kbs.slice(0,120).map(k=>{const matches=getReviews().filter(r=>r.kb===k);const label=matches.length?matches.map(r=>r.classification).filter((v,i,a)=>a.indexOf(v)===i).map(statusChip).join(" "):statusChip("Needs verification");return "<div class='field'><button data-kb='"+esc(k)+"' style='padding:5px 10px'>"+esc(k)+"</button> "+label+" <span class='subtle'>"+(matches.length?"Scoped to reviewed OS/build":"No device evidence")+"</span></div>"}).join("")+(kbs.length>120?"<p class='small'>First 120 of "+kbs.length+" KB identifiers shown.</p>":"");
+holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").value=b.dataset.kb;syncReview();$("kb").focus()})
 }
 showImportedKBs();
 $("reviewkb").onclick=()=>{
