@@ -210,6 +210,7 @@ function showMicrosoftKBs(){
  }).join("")+(filtered.length>80?"<p class='small'>Showing first 80. Search to narrow results.</p>":""):"<p class='small'>No matching Microsoft KBs in the available feed.</p>";
  container.querySelectorAll("button[data-microsoft-kb]").forEach(b=>b.onclick=()=>{
    $("kb").value=b.dataset.microsoftKb;
+   renderKBResearch();
    $("kb").scrollIntoView({behavior:"smooth",block:"center"});
    syncReview();
  });
@@ -260,7 +261,7 @@ if(!kbs.length){$("kbsearchcount").textContent="0 KB records imported";holder.in
 const shown=kbs.filter(k=>k.includes(q));
 $("kbsearchcount").textContent=shown.length+" of "+kbs.length+" unique imported KBs"+(shown.length>120?" · showing first 120":"");
 holder.innerHTML=shown.length?shown.slice(0,120).map(k=>{const matches=getReviews().filter(r=>r.kb===k);const label=matches.length?matches.map(r=>r.classification).filter((v,i,a)=>a.indexOf(v)===i).map(statusChip).join(" "):statusChip("Needs verification");return "<div class='field'><button data-kb='"+esc(k)+"' style='padding:5px 10px'>"+esc(k)+"</button> "+label+" <span class='subtle'>"+(matches.length?"Scoped to reviewed OS/build":"No device evidence")+"</span></div>"}).join("")+(shown.length>120?"<p class='small'>First 120 matching KB identifiers shown; refine your search.</p>":""):"<p class='small'>No matching KBs in your imported records. You can still enter any KB number in the review form above.</p>";
-holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").value=b.dataset.kb;syncReview();$("kb").focus()})
+holder.querySelectorAll("button[data-kb]").forEach(b=>b.onclick=()=>{$("kb").value=b.dataset.kb;syncReview();renderKBResearch();$("kb").focus()})
 }
 $("kbsearch").addEventListener("input",showImportedKBs);
 showImportedKBs();
