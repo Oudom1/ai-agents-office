@@ -5,7 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: '30 3 * * *'
+    # 17:00 UTC = 00:00 next day in Cambodia (Asia/Phnom_Penh, UTC+7)
+    - cron: '0 17 * * *'
 
 permissions:
   contents: read
