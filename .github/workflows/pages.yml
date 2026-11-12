@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * *'
 
 permissions:
   contents: read
@@ -31,15 +33,21 @@ jobs:
         run: npm run build -w frontend
         env:
           VITE_API_URL: https://ai-agents-office-api-v2.onrender.com
-      - name: Verify patch portal included in Pages build
+      - name: Include patch review pages
         run: |
           mkdir -p frontend/dist/patch-analysis
-          cp patch-analysis/index.html frontend/dist/patch-analysis/index.html
+          cp patch-analysis/index.html patch-analysis/detail.html patch-analysis/intelligence.html frontend/dist/patch-analysis/
           test -s frontend/dist/patch-analysis/index.html
           test -s frontend/dist/patch-analysis/detail.html
           test -s frontend/dist/patch-analysis/intelligence.html
           grep -q "CVE updates" frontend/dist/patch-analysis/intelligence.html
-          echo "Patch portal, dedicated details and CVE intelligence are included in deployment artifact"
+      - name: Fetch official Microsoft security KB updates
+        run: python patch-analysis/scripts/fetch_msrc_kb.py
+      - name: Verify Microsoft KB feed artifact
+        run: |
+          test -s frontend/dist/patch-analysis/microsoft-kb-updates.json
+          python -m json.tool frontend/dist/patch-analysis/microsoft-kb-updates.json > /dev/null
+          echo "KB feed generated; frontend reports source status even when MSRC is unavailable"
       - uses: actions/configure-pages@v5
         with:
           enablement: true
