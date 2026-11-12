@@ -6,6 +6,12 @@
 .pill.supported{background:#d8f5e4;color:#08763c}.pill.unsupported{background:#ffe1e1;color:#b42318}.pill.superseded{background:#e9e9eb;color:#35383f}.pill.not-applicable{background:#e9e9eb;color:#35383f}.pill.needs-verification{background:#ffe7d6;color:#a44813}.classifybar{display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}.classifybar select{max-width:240px}.audit-entry{border-top:1px solid #e3e7ed;padding:10px 0}.subtle{font-size:12px;color:#637087}
 </style></head><body><header><div class="row"><a class="button" href="./index.html">← Patch Portal</a><div><h1>CVE updates & KB support review</h1><div class="small">Official threat intelligence · evidence-based applicability · no unsupported claims</div></div></div></header>
 <main>
+<section class="card" id="notificationcenter" aria-live="polite">
+<div class="row" style="justify-content:space-between"><h2 style="margin:0">KB update notifications</h2><button id="ackalerts" type="button">Mark alerts as read</button></div>
+<p class="small">Shows newly discovered Microsoft security KBs since your last successful feed check, and updates manually classified as Unsupported. Browser-only alerts do not send push notifications. The daily ChatGPT watch is configured separately.</p>
+<div id="kbnotice" class="banner">Checking update sources...</div>
+<div class="feed" id="kbalertlist" style="max-height:235px"></div>
+</section>
 <div class="grid"><div class="card"><div class="small">Known exploited CVEs (feed)</div><div class="stat" id="count">—</div></div><div class="card"><div class="small">Recent KEV additions (last 30 days)</div><div class="stat" id="recent">—</div></div><div class="card"><div class="small">Feed last published</div><div id="released" style="font-weight:800;margin-top:8px">Not loaded</div></div></div>
 <div class="layout"><section class="card"><h2>1. Updated CVEs from CISA</h2><p class="small">Shows recently added vulnerabilities known to be exploited in the wild. This is <strong>not</strong> a complete list of all newly published CVEs. Use NVD for other vulnerabilities.</p><div class="row"><button id="refresh">Fetch current CISA KEV feed</button><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">Official CISA catalog ↗</a></div><p class="small" id="feedstatus" role="status">No current feed loaded.</p><label for="search">Filter by CVE, product or vendor</label><input id="search" placeholder="e.g. Microsoft, Adobe, CVE-2026-..." autocomplete="off"><div class="feed" id="feed"></div></section>
 <section class="card"><h2>2. CVE verification for a specific patch</h2><p class="small">Cross-check a CVE against the CISA KEV catalog and see its official vulnerability record. A KEV match means known exploitation; no match does not prove safety.</p><label for="cve">CVE identifier</label><input id="cve" placeholder="CVE-2026-12345"><div class="row" style="margin-top:12px"><button id="checkcve">Verify CVE</button><button id="matchportal">Check imported CVEs</button></div><div id="cveresult" class="result">Enter a valid CVE identifier to check its source record.</div><p class="small">Imported CVEs are read locally from this browser only. This feature does not send your corporate inventory to CISA.</p></section>
@@ -123,7 +129,11 @@ if(classification==="Superseded"&&!/^KB\d{4,8}$/.test(replacement)){msg.textCont
 if(classification!=="Needs verification"&&!build){msg.textContent="Specify OS version/build before confirming a classification.";return}
 const key=reviewIdentity(kb,os,build,arch),rows=getReviews(),entry={key,kb,os,build,arch,classification,notes,reviewer,replacement,evidenceurl,updatedAt:new Date().toISOString()};
 const index=rows.findIndex(x=>x.key===key);if(index>=0)rows[index]=entry;else rows.push(entry);
-try{localStorage.setItem(reviewStorageKey,JSON.stringify(rows));msg.textContent="Review saved locally. "+statusDescription[classification];renderReviews();showImportedKBs()}
+try{localStorage.setItem(reviewStorageKey,JSON.stringify(rows));msg.textContent="Review saved locally. "+statusDescription[classification];renderReviews();showImportedKBs();
+if(classification==="Unsupported"&&(index<0||rows[index]?.classification!=="Unsupported")){
+addLocalAlerts([{id:"unsupported:"+key+":"+entry.updatedAt,kind:"Manual unsupported classification",kb,message:"Reviewer "+reviewer+" classified "+kb+" as Unsupported for "+os+" "+build+". Evidence: "+evidenceurl,at:entry.updatedAt,read:false}]);
+}
+}
 catch(e){msg.textContent="Unable to store review; export your existing records and check browser storage."}
 };
 $("resetclass").onclick=()=>{$("classification").value="Needs verification";$("evidenceurl").value="";$("reviewnotes").value="";$("reviewer").value="";$("replacement").value="";$("classmessage").textContent="Review form cleared; saved classification unchanged."};
@@ -141,6 +151,37 @@ if(incomingKB && /^KB\d{4,8}$/i.test(incomingKB)){
   $("kb").value=incomingKB.toUpperCase();
   syncReview();
 }
+
+
+const alertKey="patch_analysis_kb_alerts_v1";
+const seenKey="patch_analysis_msrc_seen_v1";
+function readAlerts(){
+ try{const a=JSON.parse(localStorage.getItem(alertKey)||"[]");return Array.isArray(a)?a:[]}catch(e){return[]}
+}
+function addLocalAlerts(items){
+ const current=readAlerts(),ids=new Set(current.map(x=>x.id));
+ for(const item of items){if(!ids.has(item.id)){current.push(item);ids.add(item.id)}}
+ try{localStorage.setItem(alertKey,JSON.stringify(current.slice(-500)))}catch(e){}
+ showAlerts();
+}
+function showAlerts(){
+ const all=readAlerts(),unread=all.filter(x=>!x.read);
+ $("kbnotice").textContent=unread.length+" unread KB notifications. Alerts are stored only in this browser.";
+ $("kbalertlist").innerHTML=unread.slice().reverse().slice(0,30).map(x=>"<div class='field'><strong>"+esc(x.kind)+" — "+esc(x.kb)+"</strong><div class='small'>"+esc(x.message)+"</div><span class='subtle'>"+esc(x.at)+"</span></div>").join("")||"<p class='small'>No new notices.</p>";
+}
+$("ackalerts").onclick=()=>{const a=readAlerts();for(const x of a)x.read=true;try{localStorage.setItem(alertKey,JSON.stringify(a))}catch(e){}showAlerts()};
+function alertNewMSRC(payload){
+ if(payload.status==="unavailable"||!Array.isArray(payload.items)||!payload.items.length)return;
+ const now=payload.items.map(x=>x.kb);
+ let prior=null;try{prior=JSON.parse(localStorage.getItem(seenKey)||"null")}catch(e){}
+ if(Array.isArray(prior)){
+ const old=new Set(prior),incoming=payload.items.filter(x=>!old.has(x.kb));
+ addLocalAlerts(incoming.map(x=>({id:"released:"+x.kb,kind:"New MSRC KB reference",kb:x.kb,message:"New since previous successful feed check. Verify applicability and official release notes.",at:new Date().toISOString(),read:false})));
+ }
+ try{localStorage.setItem(seenKey,JSON.stringify(now))}catch(e){}
+ showAlerts();
+}
+showAlerts();
 
 /* Daily MSRC security KB discovery feed. No local corporate data is uploaded. */
 let microsoftFeed=null;
@@ -181,6 +222,7 @@ async function fetchMicrosoftKBs(){
   const payload=await res.json();
   if(!payload||!Array.isArray(payload.items))throw Error("Published file has an invalid format");
   microsoftFeed=payload;
+  alertNewMSRC(payload);
   const timestamp=Date.parse(payload.generatedAt),age=Number.isFinite(timestamp)?Math.floor((Date.now()-timestamp)/86400000):null;
   const isStale=age===null||age>2;
   $("msstatus").textContent="Feed status: "+(payload.status||"unknown")+" · Generated: "+(payload.generatedAt||"unknown")+" · "+payload.items.length+" KBs"+
